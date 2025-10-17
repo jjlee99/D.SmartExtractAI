@@ -1,4 +1,6 @@
 # 🚀 D.SmartExtractAI: 이미지 문서 자동 데이터 전환 솔루션 
+# 🔀프로세스 도식도
+<img width="1155" height="767" alt="image" src="https://github.com/user-attachments/assets/e7e09f27-c9db-498f-aa22-4df25e844ece" />
 
 
 # 🥇 LG CNS 도입 추진 예정 (Strategic Adoption Highlight)
