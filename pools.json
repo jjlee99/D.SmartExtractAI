@@ -1,0 +1,6 @@
+{
+  "ocr_pool": {
+    "slots": 3,
+    "description": "Pool for OCR tasks"
+  }
+}

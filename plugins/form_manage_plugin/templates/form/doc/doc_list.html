@@ -1,0 +1,150 @@
+{% extends "appbuilder/base.html" %}
+{% import 'general/lib.html' as mylib %}
+{% import 'appbuilder/general/lib.html' as genlib %}
+{% import 'appbuilder/baselib.html' as baselib %}
+
+{% set can_add = "can_add" | is_item_visible(modelview_name) %}
+{% set can_show = "can_show" | is_item_visible(modelview_name) %}
+{% set can_edit = "can_edit" | is_item_visible(modelview_name) %}
+{% set can_delete = "can_delete" | is_item_visible(modelview_name) %}
+{% set actions = actions | get_actions_on_list(modelview_name) %}
+
+{% block content %}
+
+    {{ genlib.panel_begin(title) }}
+    
+    <div class="well well-sm">
+        {% block list_header scoped %}
+            {{ mylib.render_list_header(can_add, page, page_size, count, actions, modelview_name) }}
+        {% endblock %}
+    </div>
+
+
+    {% block list_search scoped %}
+        {% set is_open = request.args|length > 0 %}
+        {% call genlib.accordion_tag("accordion1", _("Search"), is_open) %}
+            {% if search_columns %}
+                <form class="form-inline" method="get" action="{{ url_for(modelview_name + '.list') }}">
+                    <div class="row" style="width:100%; margin:0;">
+                        <div class="col-md-10">
+                            {% for col in search_columns %}
+                                <div class="form-group" style="margin-right:10px; margin-bottom:5px;">
+                                    <label for="{{ col }}_like" style="margin-right:5px;">
+                                        {{ label_columns.get(col) }}
+                                    </label>
+
+                                    {% if col in ['rgdt', 'updt'] %}
+                                        <!-- 날짜 검색용 -->
+                                        <div class="input-group date appbuilder_datetime" data-provide="datepicker">
+                                            <span class="input-group-addon">
+                                                <i class="fa fa-calendar cursor-hand"></i>
+                                            </span>
+                                            <input type="text"
+                                                class="form-control"
+                                                id="{{ col }}_like"
+                                                name="{{ col }}_like"
+                                                data-format="yyyy-MM-dd"
+                                                placeholder="{{ label_columns.get(col) }}"
+                                                value="{{ request.args.get(col + '_like', '') }}">
+                                        </div>
+                                    {% else %}
+                                        <!-- 일반 텍스트 검색 -->
+                                        <input type="text"
+                                            class="form-control"
+                                            id="{{ col }}_like"
+                                            name="{{ col }}_like"
+                                            placeholder="{{ label_columns.get(col) }}"
+                                            value="{{ request.args.get(col + '_like', '') }}">
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- 버튼 영역 -->
+                        <div class="col-md-2 text-right">
+                            <button type="submit" class="btn btn-primary">{{ _('검색') }}</button>
+                            <a href="{{ url_for(modelview_name + '.list') }}" class="btn btn-default">{{ _('초기화') }}</a>
+                        </div>
+                    </div>
+                </form>
+            {% endif %}
+        {% endcall %}
+    {% endblock %}
+
+    {% block list_list scoped %}
+        <div>
+    {% if count > 0 %}
+
+        {% block begin_content scoped %}
+            <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+        {% endblock %}
+
+        {% block begin_loop_header scoped %}
+            <thead>
+            <tr>
+            {% if actions %}
+            <th class="action_checkboxes">
+                <input id="check_all" class="action_check_all" name="check_all" type="checkbox">
+            </th>
+            {% endif %}
+
+            {% if can_show or can_edit or can_delete %}
+                <th class="col-md-1 col-lg-1 col-sm-1" ></th>
+            {% endif %}
+
+            {% for item in include_columns %}
+                <th>{{label_columns.get(item)}}</th>
+            {% endfor %}
+            </tr>
+            </thead>
+        {% endblock %}
+
+        {% block begin_loop_values %}
+            {% for item in value_columns %}
+                {% set pk = pks[loop.index-1] %}
+                <tr>
+                    {% if actions %}
+                    <td>
+                        <input id="{{pk}}" class="action_check" name="rowid" value="{{pk}}" type="checkbox">
+                    </td>
+                    {% endif %}
+                    {% if can_show or can_edit or can_delete %}
+                        <td><center>
+                        {{ mylib.btn_crud(can_show, can_edit, can_delete, pk, modelview_name ) }}
+                        </center></td>
+                    {% endif %}
+                    {% for value in include_columns %}
+                        {% set formatter = formatters_columns.get(value) %}
+                        {% if formatter %}
+                            <td>{{ formatter(item[value]) }}</td>
+                        {% else %}
+                            <td>{{ item[value] }}</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        {% endblock %}
+
+        {% block end_content scoped %}
+            </table>
+            </div>
+        {% endblock %}
+
+        {{ genlib.action_form(actions, modelview_name) }}
+
+        <script nonce="{{ baselib.get_nonce() }}">
+            $(document).ready(function() {
+                window.modelActions = new AdminActions();
+            });
+        </script>
+
+    {% else %}
+        <b>{{_("No records found")}}</b>
+    {% endif %}
+        </div>
+    {% endblock %}
+
+    {{ genlib.panel_end() }}
+
+{% endblock %}

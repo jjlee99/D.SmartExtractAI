@@ -1,0 +1,53 @@
+{% import 'appbuilder/baselib.html' as baselib %}
+{% import 'appbuilder/general/lib.html' as genlib %}
+
+{% macro render_list_header(can_add, page, page_size, count, actions, modelview_name) %}
+    {{ genlib.render_pagination(page, page_size, count, modelview_name) }}
+    {{ genlib.render_set_page_size(page, page_size, count, modelview_name) }}
+    {% if can_add %}
+        {% set endpoint = modelview_name + '.add' %}
+        {% set path = endpoint | safe_url_for %}
+        {% if path %}
+            {{ genlib.lnk_add(path) }}
+        {% endif %}
+    {% endif %}
+    {{ genlib.render_actions(actions, modelview_name) }}
+    {{ genlib.lnk_back() }}
+    <div class="pull-right">
+        <strong>{{ _('Record Count') }}:</strong> {{ count }}
+    </div>
+{% endmacro %}
+
+{% macro btn_crud(can_show, can_edit, can_delete, pk, modelview_name) %}
+    <div class="btn-group btn-group-xs" style="display: flex;">
+        {% if can_show %}
+            {% set endpoint = modelview_name + '.show' %}
+            {% set path = endpoint | safe_url_for(pk=pk) %}
+            {% if path %}
+                {{ genlib.lnk_show(path) }}
+            {% endif %}
+        {% endif %}
+        {% if can_edit %}
+            {% set endpoint = modelview_name + '.edit' %}
+            {% set path = endpoint | safe_url_for(pk=pk) %}
+            {% if path %}
+                {{ genlib.lnk_edit(path) }}
+            {% endif %}
+        {% endif %}
+        {% if can_delete %}
+            {% set endpoint = modelview_name + '.delete' %}
+            {% set path = endpoint | safe_url_for(pk=pk) %}
+            {% if path %}
+                {{ genlib.lnk_delete(path) }}
+            {% endif %}
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% macro lnk_separate_area(my_href) %}
+    <a href="{{my_href}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip"
+       title="{{_('영역분리')}}">
+        <span class="sr-only">{{ _('영역분리') }}</span>
+        <i class="fa fa-th-large"></i>
+    </a>
+{% endmacro %}

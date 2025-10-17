@@ -1,0 +1,98 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+{% import 'appbuilder/baselib.html' as baselib %}
+
+{% block content %}
+{{ lib.panel_begin(title) }}
+
+<form method="post" action="{{ url_for(modelview_name + '.add') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-group">
+    <label>서식명</label>
+    <select id="doc_id" name="doc_id" class="form-control" required>
+      <option value="">서식을 선택하세요</option>
+      {% for doc in doc_list %}
+      <option value="{{ doc.id }}">{{ doc.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>레이아웃명</label>
+    <select id="layout_id" name="layout_id" class="form-control" required>
+      <option value="">먼저 서식을 선택하세요</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>섹션명</label>
+    <select id="section_id" name="section_id" class="form-control" required>
+      <option value="">먼저 레이아웃을 선택하세요</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>블록 (행/열)</label>
+    <select id="block_id" name="block_id" class="form-control" required>
+      <option value="">먼저 섹션을 선택하세요</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>교정 대상 단어</label>
+    <input type="text" class="form-control" name="error_text" required>
+  </div>
+
+  <div class="form-group">
+    <label>교정 단어</label>
+    <input type="text" class="form-control" name="crrct_text" required>
+  </div>
+
+  <button type="submit" class="btn btn-success">저장</button>
+  <a href="{{ url_for(modelview_name + '.list') }}" class="btn btn-default">취소</a>
+</form>
+
+{{ lib.panel_end() }}
+
+<script nonce="{{ baselib.get_nonce() }}">
+// AJAX 연동
+$('#doc_id').change(function() {
+  const docId = $(this).val();
+  $('#layout_id').empty().append('<option value="">선택하세요</option>');
+  $('#section_id').empty().append('<option value="">선택하세요</option>');
+  $('#block_id').empty().append('<option value="">선택하세요</option>');
+  if (docId) {
+    $.getJSON(`/block_dictionary/layouts/${docId}`, function(data) {
+      data.forEach(function(item) {
+        $('#layout_id').append(`<option value="${item.id}">${item.name}</option>`);
+      });
+    });
+  }
+});
+
+$('#layout_id').change(function() {
+  const layoutId = $(this).val();
+  $('#section_id').empty().append('<option value="">선택하세요</option>');
+  $('#block_id').empty().append('<option value="">선택하세요</option>');
+  if (layoutId) {
+    $.getJSON(`/block_dictionary/sections/${layoutId}`, function(data) {
+      data.forEach(function(item) {
+        $('#section_id').append(`<option value="${item.id}">${item.name}</option>`);
+      });
+    });
+  }
+});
+
+$('#section_id').change(function() {
+  const sectionId = $(this).val();
+  $('#block_id').empty().append('<option value="">선택하세요</option>');
+  if (sectionId) {
+    $.getJSON(`/block_dictionary/blocks/${sectionId}`, function(data) {
+      data.forEach(function(item) {
+        $('#block_id').append(`<option value="${item.id}">${item.name}</option>`);
+      });
+    });
+  }
+});
+</script>
+{% endblock %}

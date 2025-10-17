@@ -1,0 +1,839 @@
+{% macro content() %}
+<script>
+/**
+ * 이미지 주석 및 객체 조작 도구를 위한 메인 스크립트입니다.
+ * 이 스크립트는 캔버스 그리기, 사용자 상호 작용(패닝, 확대/축소,
+ * 사각형 그리기), 그리고 선택/편집 가능한 객체 목록 관리를 담당합니다.
+ */
+
+// --- 상수 및 DOM 요소 ---
+
+// 캔버스 및 2D 컨텍스트
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+// 최소/최대 확대/축소 배율
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 10.0;
+// 선택된 객체의 크기 조절 핸들 크기
+const HANDLE_SIZE = 8;
+
+// 모든 UI 버튼 및 입력 필드
+const fileInput = document.getElementById("file_input");
+const btnFileSelect = document.getElementById("btn_file_select");
+const btnZoomIn = document.getElementById("btn_zoom_in");
+const btnZoomOut = document.getElementById("btn_zoom_out");
+const btnPan = document.getElementById("btn_pan");
+const btnRect = document.getElementById("btn_rect");
+const btnSelect = document.getElementById("btn_select");
+const btnClear = document.getElementById("btn_clear");
+const btnDeleteSelected = document.getElementById("btn_delete_selected");
+const btnReset = document.getElementById("btn_reset");
+const zoomLabel = document.getElementById("zoom_label");
+const objectIdBox = document.getElementById("object_id_box");
+const rectInput = document.getElementById("rect");
+const docClassIdInput = document.getElementById("doc_class_id");
+const layoutClassIdInput = document.getElementById("layout_class_id");
+const sectionNameInput = document.getElementById("section_name");
+const sectionTypeSelect = document.getElementById("section_type");
+const separateBlockTypeSelect = document.getElementById("separate_block_type");
+const btnSave = document.getElementById("btn_save");
+const selectors = { rectInput, sectionNameInput, sectionTypeSelect, separateBlockTypeSelect };
+const modal = document.getElementById('dialog_container');
+const btnConfirmBtn = document.getElementById('btn_confirm_btn');
+const coordInputs = document.querySelectorAll('.coordInput');// 다이얼로그 요소 내부의 모든 'input' 요소
+const displayimgWidth = document.getElementById('img_width');  // 이미지 너비 표시 span
+const displayimgHeight = document.getElementById('img_height');// 이미지 높이 표시 span
+
+/* --- 상태 변수 --- */
+let mode = null;              // 현재 도구 모드 ('pan', 'rect' 등)
+let scale = 1;                // 현재 확대/축소 배율
+let offsetX = 0;              // 캔버스 패닝을 위한 오프셋
+let offsetY = 0;
+let backgroundImg = null;     // 배경 이미지
+let bgW, bgH, bgX, bgY;       // 캔버스 내 치수
+let objects = [];             // 모든 객체를 저장하는 배열
+let currentId = 1;            // 고유 객체 ID를 위한 카운터
+let selectedObject = null;    // 현재 선택된 객체
+let dragging = false;         // 드래그 작업이 진행 중인지 확인하는 플래그
+let dragType = null;          // 드래그 작업 유형 ('pan', 'move', 'resize')
+let startX, startY;           // 드래그 시작 시 마우스 좌표
+let dragOffsetX, dragOffsetY; // 객체 이동 또는 패닝 시 마우스 오프셋
+let hoverHandleIndex = -1;    // 호버된 크기 조절 핸들 인덱스 (-1이면 없음)
+
+/* --- 이벤트 리스너 --- */
+
+// 버튼 클릭 핸들러 모음
+btnFileSelect.addEventListener("click", () => fileInput.click()); // 파일선택 클릭 시
+btnZoomIn.onclick = () => zoomAt(1.2, canvas.width / 2, canvas.height / 2); // 확대 클릭 시
+btnZoomOut.onclick = () => zoomAt(0.8, canvas.width / 2, canvas.height / 2);// 축소 클릭 시
+btnSelect.onclick = () => { // 선택 버튼 클릭 시
+  selectedObject = null;
+  initValue();
+  mode = null; // '선택' 모드
+};
+btnRect.onclick = () => { // 영역 추가 버튼 클릭 시
+  selectedObject = null;
+  initValue();
+  mode = "rect"; // 'rect' 모드 설정
+};
+btnDeleteSelected.onclick = () => { // 선택 영역 삭제 클릭 시
+  if (selectedObject) {
+    objects = objects.filter((obj) => obj.id !== selectedObject.id);
+    selectedObject = null;
+    initValue();
+    draw();
+  }
+};
+btnClear.onclick = () => {  // 영역 전체 삭제 클릭 시
+  objects = [];
+  selectedObject = null;
+  initValue();
+  draw();
+};
+btnReset.onclick = () => {  // 초기화 클릭 시
+  scale = 1;
+  offsetX = 0;
+  offsetY = 0;
+  selectedObject = null;
+  initValue();
+  draw();
+};
+
+// 이미지 로드를 위한 파일 입력 변경 핸들러
+fileInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    // 이전 이미지 비율 저장 -> 새 이미지 보여줄 때 영역들이 원래 좌표로 다시 맞추기위해
+    const oldImgRatio = window.imageRatio ? {...window.imageRatio} : null;
+    const oldBgX = bgX;
+    const oldBgY = bgY;
+
+    backgroundImg = new Image();
+    backgroundImg.onload = () => {
+      // 종횡비를 유지하며 캔버스에 맞게 이미지 크기 계산
+      const imgAspect = backgroundImg.width / backgroundImg.height;
+      const canvasAspect = canvas.width / canvas.height;
+
+      // 캔버스 여백 (픽셀 단위)
+      const margin = 50;// 50px
+      const innerWidth = canvas.width - margin * 2;
+      const innerHeight = canvas.height - margin * 2;
+      let scaleFactor;
+
+      if   (imgAspect > canvasAspect) scaleFactor = innerWidth / backgroundImg.width; // 가로가 더 긴 경우 → 가로에 맞추되 여백 고려
+      else scaleFactor = innerHeight / backgroundImg.height;  // 세로가 더 긴 경우 → 세로에 맞추되 여백 고려
+
+      bgW = backgroundImg.width * scaleFactor;
+      bgH = backgroundImg.height * scaleFactor;
+      bgX = (canvas.width - bgW) / 2;
+      bgY = (canvas.height - bgH) / 2;
+
+      if (oldImgRatio) {  // 기존 사각형 좌표를 새 이미지 기준으로 재계산
+        objects.forEach(obj => {
+          // 이전 캔버스 좌표 → 이미지 기준 좌표
+          const imgX = (obj.rect.x - oldBgX) * oldImgRatio.x;
+          const imgY = (obj.rect.y - oldBgY) * oldImgRatio.y;
+
+          // 이미지 기준 좌표 → 새 캔버스 좌표
+          obj.rect.x = (imgX / window.imageRatio.x) + bgX;
+          obj.rect.y = (imgY / window.imageRatio.y) + bgY;
+        });
+      }
+
+      // 이미지의 실제 위치(bgX, bgY)와 크기(bgW, bgH)를 기준으로 비율을 계산합니다.
+      window.imageRatio = {
+          x: backgroundImg.width / bgW,
+          y: backgroundImg.height / bgH
+      };
+      draw();
+      displayimgWidth.innerText = '이미지 너비: ' + backgroundImg.width;
+      displayimgHeight.innerText = '이미지 높이: ' + backgroundImg.height;
+    };
+    backgroundImg.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+
+});
+
+// 입력 필드 변경 시 선택된 객체 속성 업데이트 이벤트 리스너
+sectionNameInput.addEventListener("input", (e) => { // 영역 명 변경 시
+  if (selectedObject) selectedObject.sectionName = e.target.value;
+});
+rectInput.addEventListener('click', (e) => { // 좌표 input 클릭 시
+  if (selectedObject) {  // 영역이 선택 되어 있는 경우인지 확인
+    const rectValues = [
+      ((selectedObject.rect.x - bgX) * window.imageRatio.x).toFixed(2),
+      ((selectedObject.rect.y - bgY) * window.imageRatio.y).toFixed(2),
+      (selectedObject.rect.w * window.imageRatio.x).toFixed(2),
+      (selectedObject.rect.h * window.imageRatio.y).toFixed(2)
+    ];
+    coordInputs.forEach((input, index) => {
+      // 각 input 요소의 value를 현재값 문자열로 설정
+      input.value = rectValues[index];
+    });
+    modal.style.display = 'block';
+  }
+})
+btnConfirmBtn.addEventListener('click', (e) => { // 좌표 설정 버튼 클릭시
+  // 직접 입력한 좌표 값을 재 설정하고 사각형 이동 및 크기 조절하기
+  setCoordData();
+  draw();
+
+  modal.style.display = 'none';
+})
+coordInputs.forEach(el => {
+  el.addEventListener('input', (e) => {// 좌표값이 값이 들어올때마다 실행
+    // 소수점 이하 두 자리까지만 허용하는 정규식
+    /** ^\d* : 문자열 시작에서 0개 이상의 숫자
+    * (?:\.\d{0,2})? : '?:'로 그룹을 만들고, '?'로 그룹 전체를 선택적으로 만듦
+    * \. : 소수점
+    * \d{0,2} : 0개 또는 2개의 숫자 */
+    const regex = /^\d*(?:\.\d{0,2})?$/;
+
+    // 현재 입력된 값이 정규식에 맞지 않으면, 마지막 문자를 제거
+    if (!regex.test(el.value)) {
+      el.value = el.value.slice(0, -1);
+    }
+  })
+})
+sectionTypeSelect.addEventListener("change", (e) => {// 영역분리 타입 선택 시
+  if (selectedObject) selectedObject.sectionType = e.target.value;
+});
+separateBlockTypeSelect.addEventListener("change", (e) => { // 영역 블록화 타입 선택 시
+  if (selectedObject) selectedObject.separateBlockType = e.target.value;
+});
+
+// 캔버스 마우스 이벤트 리스너
+canvas.addEventListener("mousedown", handleMouseDown);  // 캔버스 내에서 mouseDown 이벤트 발생 시 함수 실행
+window.addEventListener("mousemove", handleMouseMove);  // 모든 항목에서 mouseMove 이벤트 발생 시 함수 실행
+window.addEventListener("mouseup", handleMouseUp);
+canvas.addEventListener("wheel", handleWheel, {
+  passive: false
+});
+// 전역 마우스다운 이벤트 리스너를 추가하여 다이얼로그 외부 클릭을 감지
+document.addEventListener('mousedown', (e) => {
+
+  // 클릭된 요소가 다이얼로그 컨테이너, 'rect' 입력 필드, 또는 그 자식 요소가 아닌지 확인
+  if (modal.style.display === 'block' && !modal.contains(e.target) && e.target !== rectInput) {
+    // 다이얼로그를 숨깁니다.
+    modal.style.display = 'none';
+
+    // 다이얼로그 내부의 입력 필드 값을 비웁니다.
+    const coordInputs = modal.querySelectorAll('.coordInput');
+    coordInputs.forEach(input => {
+      input.value = '';
+    });
+  }
+});
+
+// --- 핵심 함수 ---
+
+/**
+ * 우측 입력 값이 빈상태로 재설정이 되었을 때 입력창들 readonly = true 설정
+ */
+const setReadonly = () => {
+  Object.values(selectors).forEach(el => {
+    if (el.tagName.toLowerCase() === "select") {
+      el.disabled = true; 
+    } else {
+        if (!selectedObject && modal.style.display === 'block') {  // 좌표를 입력 중이였다가 영역 선택을 풀은 경우
+          coordInputs.forEach(input => {
+            // 각 input 요소의 value를 빈 문자열로 설정
+            input.value = '';
+          });
+          modal.style.display = 'none';
+        }
+        if (el.id === 'rect') return; // 좌표 값경우는 readonly를 유지
+        el.readOnly = true;
+    }
+  });
+}
+
+/**
+ * element를 선택하였을 때 입력창들 readonly = false 설정
+ */
+const unsetReadonly = () => {
+  Object.values(selectors).forEach(el => {
+    if (el.tagName.toLowerCase() === "select") {
+      el.disabled = false;
+    } else {
+      if (el.id === 'rect') return; // 좌표 값경우는 readonly를 유지
+      el.readOnly = false;
+    }
+  });
+}
+
+/**
+ * 속성 입력 필드를 초기 빈 상태로 재설정합니다.
+ */
+function initValue() {
+  objectIdBox.value = "";
+  rectInput.value = "";
+  sectionNameInput.value = "";
+  sectionTypeSelect.value = "";
+  separateBlockTypeSelect.value = "";
+  setReadonly();
+}
+
+/**
+ * 선택된 객체의 데이터로 속성 입력 필드를 채웁니다.
+ * @param {object} obj 표시할 객체, 필드를 지우려면 null.
+ */
+function setValue(obj) {
+  if (!obj) {
+    initValue();
+    return;
+  }
+  // 배경 이미지가 없으면 좌표 변환을 수행할 수 없습니다.
+  if (!backgroundImg || !window.imageRatio) {
+    objectIdBox.value = obj.id;
+    rectInput.value = `(${obj.rect.x.toFixed(2)},${obj.rect.y.toFixed(2)},${obj.rect.w.toFixed(2)},${obj.rect.h.toFixed(2)})`;
+  } else {
+    // ✅ 수정된 코드: 캔버스 좌표를 이미지 기준 좌표로 변환
+    const imgX = (obj.rect.x - bgX) * window.imageRatio.x;
+    const imgY = (obj.rect.y - bgY) * window.imageRatio.y;
+    const imgW = obj.rect.w * window.imageRatio.x;
+    const imgH = obj.rect.h * window.imageRatio.y;
+    objectIdBox.value = obj.id;
+    rectInput.value = `(${imgX.toFixed(2)},${imgY.toFixed(2)},${imgW.toFixed(2)},${imgH.toFixed(2)})`;
+  }
+  sectionNameInput.value = obj.sectionName || "";
+  sectionTypeSelect.value = obj.sectionType || "";
+  separateBlockTypeSelect.value = obj.separateBlockType || "";
+  unsetReadonly();
+}
+
+/**
+ * 새 사각형 객체를 캔버스에 추가합니다.
+ * @param {number} x X 좌표.
+ * @param {number} y Y 좌표.
+ * @param {number} w 너비.
+ * @param {number} h 높이.
+ */
+function addRect(x, y, w, h) {
+  const newRect = {
+    id: "obj" + currentId++,
+    rect: { x, y, w, h },
+    sectionName: "",
+    sectionType: "",
+    separateBlockType: "",
+  };
+  objects.push(newRect);
+  selectedObject = newRect;
+  setValue(selectedObject);
+  draw();
+}
+
+/**
+ * 객체의 8개 크기 조절 핸들 좌표를 가져옵니다.
+ * @param {object} obj 핸들을 가져올 객체.
+ * @returns {Array<Array<number>>} 핸들 좌표 [x, y]의 배열.
+ */
+function getHandles(obj) {
+  const { x, y, w, h } = obj.rect;
+  return [
+    [x, y],
+    [x + w / 2, y],
+    [x + w, y],
+    [x, y + h / 2],
+    [x + w, y + h / 2],
+    [x, y + h],
+    [x + w / 2, y + h],
+    [x + w, y + h],
+  ];
+}
+
+/**
+ * 주어진 핸들 인덱스에 대한 커서 스타일을 결정합니다.
+ * @param {number} index 핸들 인덱스.
+ * @returns {string} CSS 커서 스타일.
+ */
+function getCursorForHandle(index) {
+  switch (index) {
+    case 0:
+    case 7:
+      return "nwse-resize";
+    case 1:
+    case 6:
+      return "ns-resize";
+    case 2:
+    case 5:
+      return "nesw-resize";
+    case 3:
+    case 4:
+      return "ew-resize";
+    default:
+      return "default";
+  }
+}
+
+/**
+ * 캔버스에 모든 객체를 그리고, 선택된 객체에 대해서는 크기 조절 핸들을 그립니다.
+ */
+function drawObjects() {
+  objects.forEach((obj) => {
+    // 메인 사각형 그리기
+    //ctx.fillStyle = "rgba(255,255,150,0.8)";
+    ctx.fillStyle = "rgba(128, 0, 128, 0.3)";
+    ctx.fillRect(obj.rect.x, obj.rect.y, obj.rect.w, obj.rect.h);
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(obj.rect.x, obj.rect.y, obj.rect.w, obj.rect.h);
+
+    // 객체가 선택된 경우 핸들 그리기
+    if (selectedObject === obj) {
+      const handles = getHandles(obj);
+      handles.forEach((p, i) => {
+        ctx.fillStyle = i === hoverHandleIndex ? "red" : "white";
+        ctx.fillRect(p[0] - HANDLE_SIZE / 2, p[1] - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+        ctx.strokeRect(p[0] - HANDLE_SIZE / 2, p[1] - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+      });
+    }
+  });
+}
+
+/**
+ * 메인 그리기 함수. 캔버스를 지우고, 변환을 적용하고,
+ * 배경 이미지와 모든 객체를 그립니다.
+ */
+function draw() {
+    // 캔버스 크기 재설정 및 변환(transform) 설정
+    // canvas.width = 900;
+    // canvas.height = 800;
+    const parent = canvas.parentElement;
+    const parentWidth = parent.clientWidth;
+    const parentHeight = parent.clientHeight;
+
+    // 캔버스의 크기를 부모 태그에 맞춤
+    canvas.width = parentWidth;
+    canvas.height = parentHeight;
+    
+    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+    // 캔버스 초기화
+    ctx.clearRect(-offsetX / scale, -offsetY / scale, canvas.width / scale, canvas.height / scale);
+    // 배경 이미지 그리기
+    if (backgroundImg) ctx.drawImage(backgroundImg, bgX, bgY, bgW, bgH);
+    // 사각형 객체 그리기
+    drawObjects();
+    // 줌 배율 업데이트
+    zoomLabel.textContent = "Zoom level: " + scale.toFixed(4);
+}
+
+
+/**
+ * 마우스 좌표를 화면 공간에서 캔버스 공간으로 변환합니다.
+ * 확대/축소 및 패닝을 고려합니다.
+ * @param {MouseEvent} e 마우스 이벤트 객체.
+ * @returns {Array<number>} 캔버스 공간의 [x, y] 좌표.
+ */
+function toCanvasCoord(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  return [(x - offsetX) / scale, (y - offsetY) / scale];
+}
+
+/**
+ * 특정 지점을 중심으로 캔버스를 확대 또는 축소합니다.
+ * @param {number} factor 확대/축소 배율 (예: 1.2는 확대).
+ * @param {number} cx 확대/축소 중심점의 X 좌표 (캔버스 공간).
+ * @param {number} cy 확대/축소 중심점의 Y 좌표 (캔버스 공간).
+ */
+function zoomAt(factor, cx, cy) {
+  const prevScale = scale;
+  let newScale = scale * factor;
+
+  // 새 배율을 최소/최대 한계값으로 제한
+  if (newScale < MIN_SCALE) newScale = MIN_SCALE;
+  if (newScale > MAX_SCALE) newScale = MAX_SCALE;
+
+  // 확대/축소 지점을 중앙에 유지하기 위해 오프셋 조정
+  offsetX = cx - (cx - offsetX) * (newScale / prevScale);
+  offsetY = cy - (cy - offsetY) * (newScale / prevScale);
+
+  scale = newScale;
+  draw();
+}
+
+const setCoordData = () => {
+    // 1. 현재 선택된 객체가 있는지 확인합니다.
+    if (!selectedObject) {
+        console.log("먼저 영역을 선택하세요.");
+        return;
+    }
+
+    // 2. 입력 필드에서 값들을 가져와 숫자로 변환합니다.
+    // newImgX, newImgY : 이미지 기준의 좌표
+    const newImgX = parseFloat(document.getElementById('x_coord').value);
+    const newImgY = parseFloat(document.getElementById('y_coord').value);
+    const newWidth = parseFloat(document.getElementById('width').value);
+    const newHeight = parseFloat(document.getElementById('height').value);
+
+    // 3. 입력 값이 유효한지 확인합니다.
+    if (isNaN(newImgX) || isNaN(newImgY) || isNaN(newWidth) || isNaN(newHeight) || newWidth <= 0 || newHeight <= 0) {
+        console.log("유효한 숫자 값을 입력하세요. 너비와 높이는 0보다 커야 합니다.");
+        return;
+    }
+
+    // 4. 입력된 이미지 기준 좌표를 캔버스 좌표로 변환하여 객체에 적용합니다.
+    // 배경 이미지가 없으면 변환 없이 직접 설정
+    if (backgroundImg && window.imageRatio) {
+        // ✅ 수정된 코드: 이미지 기준 좌표를 캔버스 좌표로 변환
+        selectedObject.rect.x = (newImgX / window.imageRatio.x) + bgX;
+        selectedObject.rect.y = (newImgY / window.imageRatio.y) + bgY;
+        selectedObject.rect.w = newWidth / window.imageRatio.x;
+        selectedObject.rect.h = newHeight / window.imageRatio.y;
+    } else {
+        selectedObject.rect.x = newImgX;
+        selectedObject.rect.y = newImgY;
+        selectedObject.rect.w = newWidth;
+        selectedObject.rect.h = newHeight;
+    }
+
+    // 5. 변경된 값으로 입력 필드를 업데이트하고 다시 그립니다.
+    setValue(selectedObject);
+    draw();
+}
+
+// --- 마우스 이벤트 핸들러 ---
+
+function handleMouseDown(e) {
+  const [mx, my] = toCanvasCoord(e);
+  startX = mx;
+  startY = my;
+
+  if (mode === "rect") {
+    // 기존과 동일: 새로운 사각형을 그리기 시작
+    // 이미지가 있는지 확인
+    if(backgroundImg == null){// 이미지 좌표 기준으로 영역을 추가하기에 if문 추가
+      alert('이미지 파일을 먼저 추가해주세요.');
+      mode = 'pan';
+      return false;
+    }
+    dragging = true;
+    const newRect = {
+      id: "obj" + currentId++,
+      rect: { x: mx, y: my, w: 0, h: 0 },
+      sectionName: "",
+      sectionType: "",
+      separateBlockType: "",
+    };
+    objects.push(newRect);
+    selectedObject = newRect;
+    setValue(selectedObject);
+  } else {
+    // 영역 추가 모드가 아닐 때 (선택/이동 모드)
+    let foundObject = false;
+
+    // 1. 크기 조절 핸들을 클릭했는지 확인
+    if (selectedObject) {
+      const handles = getHandles(selectedObject);
+      for (let i = 0; i < handles.length; i++) {
+        const p = handles[i];
+        if (
+          mx >= p[0] - HANDLE_SIZE &&
+          mx <= p[0] + HANDLE_SIZE &&
+          my >= p[1] - HANDLE_SIZE &&
+          my <= p[1] + HANDLE_SIZE
+        ) {
+          dragging = true;
+          dragType = "resize";
+          hoverHandleIndex = i;
+          foundObject = true;
+          break;
+        }
+      }
+    }
+
+    // 2. 핸들을 클릭하지 않았다면, 오브젝트(노란 사각형)를 클릭했는지 확인
+    if (!foundObject) {
+      selectedObject = null;
+      initValue();
+      for (const obj of objects) {
+        if (
+          mx >= obj.rect.x &&
+          mx <= obj.rect.x + obj.rect.w &&
+          my >= obj.rect.y &&
+          my <= obj.rect.y + obj.rect.h
+        ) {
+          selectedObject = obj;
+          setValue(obj);
+          dragging = true;
+          dragType = "move";
+          dragOffsetX = mx - obj.rect.x;
+          dragOffsetY = my - obj.rect.y;
+          foundObject = true;
+          break;
+        }
+      }
+    }
+
+    // 3. 핸들이나 오브젝트를 클릭하지 않았다면, 이동 모드로 전환
+    if (!foundObject) {
+      dragging = true;
+      dragType = "pan";
+      dragOffsetX = e.clientX;
+      dragOffsetY = e.clientY;
+    }
+  }
+  draw();
+}
+
+function handleMouseMove(e) {
+  const [mx, my] = toCanvasCoord(e);
+
+  if (dragging) {
+    if (mode === "rect") {
+      // 새 사각형 크기 조절 (기존 기능 유지)
+      selectedObject.rect.w = mx - startX;
+      selectedObject.rect.h = my - startY;
+    } else if (dragType === "pan") {
+      // 캔버스 패닝 시 커서를 손바닥 모양으로 변경
+      canvas.style.cursor = 'grabbing';
+      offsetX += e.clientX - dragOffsetX;
+      offsetY += e.clientY - dragOffsetY;
+      dragOffsetX = e.clientX;
+      dragOffsetY = e.clientY;
+    } else if (dragType === "move") {
+      // 선택된 영역 이동
+      selectedObject.rect.x = mx - dragOffsetX;
+      selectedObject.rect.y = my - dragOffsetY;
+    } else if (dragType === "resize") {
+      // 크기 조절
+      resizeObject(mx, my);
+    }
+    draw();
+  } else {
+    // 드래그 중이 아닐 때만 호버 상태에 따라 커서 업데이트
+    updateCursor(mx, my);
+    draw();
+  }
+}
+
+function handleMouseUp() {
+  if (mode === "rect" && selectedObject) {
+    // 사각형 치수 정규화 (너비/높이가 음수가 되지 않도록)
+    normalizeRect(selectedObject.rect);
+    mode = null; // 사각형 그리기 모드 종료
+  }
+  setValue(selectedObject);
+  dragging = false;
+  dragType = null;
+}
+
+function handleWheel(e) {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  const [cx, cy] = toCanvasCoord(e);
+  zoomAt(factor, cx, cy);
+}
+
+/**
+ * 새 마우스 좌표와 현재 드래그 중인 핸들을 기반으로 선택된 객체의 크기를 조절합니다.
+ * @param {number} mx 새 마우스의 X 좌표.
+ * @param {number} my 새 마우스의 Y 좌표.
+ */
+function resizeObject(mx, my) {
+  const rect = selectedObject.rect;
+  const oldX = rect.x;
+  const oldY = rect.y;
+  const oldW = rect.w;
+  const oldH = rect.h;
+
+  switch (hoverHandleIndex) {
+    case 0: // 왼쪽 상단
+      rect.x = mx;
+      rect.y = my;
+      rect.w = oldW + oldX - mx;
+      rect.h = oldH + oldY - my;
+      break;
+    case 1: // 상단 중앙
+      rect.y = my;
+      rect.h = oldH + oldY - my;
+      break;
+    case 2: // 오른쪽 상단
+      rect.w = mx - oldX;
+      rect.y = my;
+      rect.h = oldH + oldY - my;
+      break;
+    case 3: // 왼쪽 중앙
+      rect.x = mx;
+      rect.w = oldW + oldX - mx;
+      break;
+    case 4: // 오른쪽 중앙
+      rect.w = mx - oldX;
+      break;
+    case 5: // 왼쪽 하단
+      rect.x = mx;
+      rect.w = oldW + oldX - mx;
+      rect.h = my - oldY;
+      break;
+    case 6: // 하단 중앙
+      rect.h = my - oldY;
+      break;
+    case 7: // 오른쪽 하단
+      rect.w = mx - oldX;
+      rect.h = my - oldY;
+      break;
+  }
+  normalizeRect(rect);
+}
+
+/**
+ * 사각형의 너비와 높이가 항상 양수가 되도록 치수를 정규화합니다.
+ * @param {object} rect 정규화할 사각형 객체.
+ */
+function normalizeRect(rect) {
+  if (rect.w < 0) {
+    rect.x += rect.w;
+    rect.w = -rect.w;
+  }
+  if (rect.h < 0) {
+    rect.y += rect.h;
+    rect.h = -rect.h;
+  }
+}
+
+/**
+ * 마우스가 핸들 위에 호버링하는지 여부에 따라 캔버스 커서를 업데이트합니다.
+ * @param {number} mx 캔버스 공간의 마우스 X 좌표.
+ * @param {number} my 캔버스 공간의 마우스 Y 좌표.
+ */
+function updateCursor(mx, my) {
+  hoverHandleIndex = -1;
+  let isHoveringObject = false;
+
+  // 1. 오브젝트 위에 호버링 중인지 확인
+  for (const obj of objects) {
+    if (
+      mx >= obj.rect.x &&
+      mx <= obj.rect.x + obj.rect.w &&
+      my >= obj.rect.y &&
+      my <= obj.rect.y + obj.rect.h
+    ) {
+      isHoveringObject = true;
+      break;
+    }
+  }
+
+  // 2. 크기 조절 핸들 위에 호버링 중인지 확인
+  if (selectedObject) {
+    const handles = getHandles(selectedObject);
+    for (let i = 0; i < handles.length; i++) {
+      const p = handles[i];
+      if (
+        mx >= p[0] - HANDLE_SIZE &&
+        mx <= p[0] + HANDLE_SIZE &&
+        my >= p[1] - HANDLE_SIZE &&
+        my <= p[1] + HANDLE_SIZE
+      ) {
+        hoverHandleIndex = i;
+        break;
+      }
+    }
+  }
+
+  // 3. 상태에 따라 커서 설정
+  if (hoverHandleIndex >= 0) {
+    // 크기 조절 핸들 위에 있을 때
+    canvas.style.cursor = getCursorForHandle(hoverHandleIndex);
+  } else if (isHoveringObject) {
+    // 오브젝트 위에 있을 때
+    canvas.style.cursor = "move";
+  } else if (mode === "rect") {
+    // '영역 추가' 모드일 때 crosshair 커서 사용
+    canvas.style.cursor = "crosshair";
+  } else {
+    // 그 외의 경우 (캔버스 배경) 'grab' 커서 사용
+    canvas.style.cursor = "grab";
+  }
+}
+
+// --- 저장 및 유효성 검사 함수 ---
+
+/**
+ * 저장하기 전에 모든 객체의 데이터 유효성을 검사합니다.
+ * @returns {boolean} 모든 데이터가 유효하면 true, 아니면 false.
+ */
+const validationData = () => {
+  // 1. fileInput 요소에 파일이 첨부되었는지 확인
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      alert("파일을 첨부해주세요.");
+      return false;
+  }
+
+  // 2. 영역(객체)이 하나도 없는지 확인
+  if (objects.length === 0) {
+    alert("영역을 설정해주세요.");
+    return false;
+  }
+
+  // 3. 각 객체의 필수 입력값(sectionName, sectionType, separateBlockType)이 비어있는지 확인
+  for (const obj of objects) {
+    if (!obj.sectionName || !obj.sectionType || !obj.separateBlockType) {
+      alert("각 영역의 입력값을 확인해주세요.");
+      return false;
+    }
+  }
+
+  // 모든 유효성 검사 통과
+  return true;
+};
+
+// 저장 버튼 클릭 핸들러
+btnSave.addEventListener("click", () => {
+  if (validationData()) { // validation
+      // form data 생성 및 담기
+      const formData = new FormData();
+      const data = objects.map(obj => ({
+        rect: {
+            x: ((obj.rect.x - bgX) * window.imageRatio.x).toFixed(2),
+            y: ((obj.rect.y - bgY) * window.imageRatio.y).toFixed(2),
+            w: ((obj.rect.w * window.imageRatio.x)).toFixed(2),
+            h: ((obj.rect.h * window.imageRatio.y)).toFixed(2)
+        },
+        sectionName: obj.sectionName,
+        sectionType: obj.sectionType,
+        separateBlockType: obj.separateBlockType,
+      }));
+      formData.append("docClassId", docClassIdInput.value);
+      formData.append("layoutClassId", layoutClassIdInput.value);
+      formData.append("sectionList", JSON.stringify(data));
+
+      const input = $('#file_input');
+      // input 요소에서 첫 번째(그리고 유일한) 파일을 가져옵니다.
+      const file = input[0].files[0];
+      if (file) {// 파일이 존재하면 formData에 추가합니다.
+          formData.append('templateFile', file);
+      }
+
+      $.ajax({
+        url: "/layout/section/"+layoutClassIdInput.value,
+        type: "POST",
+        dataType:"json",
+        processData: false,
+        contentType: false,
+        data: formData,
+        success: function(res) {
+          if(res.status === "success") {
+            window.location.href = res.redirect_url;  // 서버가 넘겨준 URL로 이동
+          } else {
+            alert("에러: " + res.message);
+          }
+        },
+        error: function(e) {
+            alert("저장 중 문제가 발생하였습니다.");
+            // 실패 시 후처리 필요
+        },
+      });
+  }
+});
+
+// 캔버스 설정을 위한 초기 그리기 호출
+draw();
+setReadonly();
+</script>
+{% endmacro %}

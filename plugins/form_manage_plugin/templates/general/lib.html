@@ -1,0 +1,129 @@
+{% import 'appbuilder/baselib.html' as baselib %}
+{% import 'appbuilder/general/lib.html' as genlib %}
+
+{% macro render_list_header(can_add, page, page_size, count, actions, modelview_name) %}
+    {{ genlib.render_pagination(page, page_size, count, modelview_name) }}
+    {{ genlib.render_set_page_size(page, page_size, count, modelview_name) }}
+    {% if can_add %}
+        {% set endpoint = modelview_name + '.add' %}
+        {% set path = endpoint | safe_url_for %}
+        {% if path %}
+            {{ genlib.lnk_add(path) }}
+        {% endif %}
+    {% endif %}
+    {{ genlib.render_actions(actions, modelview_name) }}
+    {{ genlib.lnk_back() }}
+    <div class="pull-right">
+        <strong>{{ _('Record Count') }}:</strong> {{ count }}
+    </div>
+{% endmacro %}
+
+{% macro render_custom_page_jump(page, page_size, count, modelview_name, page_step=25) %}
+    {# 전체 페이지 수 계산 #}
+    {% set total_pages = ((count / page_size)|round(0,'ceil')|int) %}
+
+    {# 전체 페이지가 page_step(25)보다 작거나 1페이지면 드롭다운 표시 안 함 #}
+    {% if total_pages > page_step %}
+    <div class="btn-group dropup" style="margin-left: 5px;">
+        <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            {{_('페이지')}} <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-right" role="menu">
+            {% set current_page_jump = 0 %}
+            {# i는 1부터 시작하며, total_pages / page_step + 1회 반복 (필요한 최대 횟수) #}
+            {% for i in range(1, (total_pages // page_step) + 2) %}
+                {% set target_page_num = i * page_step %}
+
+                {# 마지막 페이지는 total_pages를 넘지 않도록 조정 #}
+                {% if target_page_num > total_pages %}
+                    {% set target_page_num = total_pages %}
+                {% endif %}
+
+                {# 중복 페이지 번호를 피하고, 1페이지만 점프 옵션에 추가 #}
+                {% if target_page_num > current_page_jump and target_page_num > 1 %}
+                    {# Flask-AppBuilder의 link_page 필터는 lib.html에서 임포트한 genlib을 통해 접근 가능합니다 #}
+                    {% set url = target_page_num - 1 | link_page(modelview_name) %}
+                    <li {% if (target_page_num - 1) == page %}class="active"{% endif %}>
+                        <a href="{{ url }}">{{ target_page_num }}</a>
+                    </li>
+                    {% set current_page_jump = target_page_num %}
+                {% endif %}
+
+                {# 마지막 페이지에 도달했으면 반복 중단 #}
+                {% if target_page_num == total_pages %}
+                   
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro render_fixed_page_size(page, page_size, count, modelview_name) %}
+{% if not page %} {% set page = 0 %} {% endif %}
+{% set pages = ((count / page_size)|round(0,'ceil')|int)%}
+{# pages > 1 조건은 유지하여 1페이지일 때는 드롭다운을 숨김 #}
+
+{# {% if pages > 1 %} #}
+{% if count > 0 %} 
+<div class="btn-group">
+<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown">
+    {{_('Page size')}}<span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu" role="menu">
+        {% for sel_page_size in range(25,125,25) %}
+            {# 🚨 원본의 조건문 (page*sel_page_size <= count)을 제거했습니다. #}
+            {% if sel_page_size == page_size %}
+                <li class="active"><a href="{{sel_page_size | link_page_size(modelview_name) }}">{{sel_page_size}}</a></li>
+            {% else %}
+                {# link_page_size 필터는 genlib에서 왔으므로, genlib. 접두사를 사용하는 것이 안전합니다. #}
+                <li><a href="{{sel_page_size | link_page_size(modelview_name) }}">{{sel_page_size}}</a></li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+
+
+{% macro btn_crud(can_show, can_edit, can_delete, pk, modelview_name) %}
+    <div class="btn-group btn-group-xs" style="display: flex;">
+        {% if can_show %}
+            {% set endpoint = modelview_name + '.show' %}
+            {% set path = endpoint | safe_url_for(pk=pk) %}
+            {% if path %}
+                {{ genlib.lnk_show(path) }}
+            {% endif %}
+        {% endif %}
+        {% if can_edit %}
+            {% set endpoint = modelview_name + '.edit' %}
+            {% set path = endpoint | safe_url_for(pk=pk) %}
+            {% if path %}
+                {{ genlib.lnk_edit(path) }}
+            {% endif %}
+        {% endif %}
+        {% if can_delete %}
+            {% set endpoint = modelview_name + '.delete' %}
+            {% set path = endpoint | safe_url_for(pk=pk) %}
+            {% if path %}
+                {{ genlib.lnk_delete(path) }}
+            {% endif %}
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% macro lnk_separate_area(my_href) %}
+    <a href="{{my_href}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip"
+       title="{{_('구역분리')}}">
+        <span class="sr-only">{{ _('구역분리') }}</span>
+        <i class="fas fa-expand"></i>
+    </a>
+{% endmacro %}
+{% macro lnk_separate_block(my_href) %}
+    <a href="{{my_href}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip"
+       title="{{_('블록매핑')}}">
+        <span class="sr-only">{{ _('블록매핑') }}</span>
+        <i class="fas fa-th"></i>
+    </a>
+{% endmacro %}

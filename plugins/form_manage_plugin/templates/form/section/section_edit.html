@@ -1,0 +1,110 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+{% block content %}
+{{ lib.panel_begin(title, "edit") }}
+
+{% block edit_form %}
+<div id="Home" class="tab-pane active">
+    <form id="model_form" action="" method="post" enctype="multipart/form-data">
+        {% if csrf_token %}
+        <input id="csrf_token" name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+        {% endif %}
+        <input id="section_class_id" name="section_class_id" type="hidden" value="{{ item.section_class_id }}">
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="section_name" control-label="">구역명</label>
+                    </td>
+                    <td>
+                        <input class="form-control" id="section_name" name="section_name" placeholder="구역명" type="text" value="{{ item.section_name }}">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="section_type" control-label="">구역 타입</label>
+                    </td>
+                    <td>
+                        {% if section_type_list and section_type_list|length > 0 %}
+                        <select class="form-control input-sm" name="section_type" id="section_type" required>
+                            <option value="" disabled selected>구역 타입을 선택해주세요.</option>
+                            {% for section_type in section_type_list %}
+                                <option value="{{ section_type.cd_val }}" {% if section_type.cd_val == item.section_type %}selected{% endif %}> 
+                                    {{ section_type.cd_nm }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
+                        <span class="help-block">구역 타입 데이터가 없습니다. 먼저 등록하세요.</span>
+                        <select name="section_type" id="section_type" style="display: none"></select>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="section_order" control-label="">구역 순서</label>
+                    </td>
+                    <td>
+                        <input class="form-control" id="section_order" name="section_order" placeholder="구역 순서" type="text" value="{{ item.section_order or 0 }}">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="separate_section_info" control-label="">구역분리 작업 정보</label>
+                    </td>
+                    <td>
+                        <textarea class="form-control" id="separate_section_info" name="separate_section_info" placeholder="구역분리 작업 정보" rows="3">{{ item.separate_section_info }}</textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="separate_block_info" control-label="">블록화 작업 정보</label>
+                    </td>
+                    <td>
+                        <textarea class="form-control" id="separate_block_info" name="separate_block_info" placeholder="블록화 작업 정보" rows="3">{{ item.separate_block_info }}</textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="ocr_info" control-label="">OCR 작업 정보</label>
+                    </td>
+                    <td>
+                        <textarea class="form-control" id="ocr_info" name="ocr_info" placeholder="OCR 작업 정보" rows="3">{{ item.ocr_info }}</textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="cleansing_info" control-label="">클렌징 작업 정보</label>
+                    </td>
+                    <td>
+                        <textarea class="form-control" id="cleansing_info" name="cleansing_info" placeholder="클렌징 작업 정보" rows="3">{{ item.cleansing_info }}</textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="col-lg-2">
+                        <label for="structuring_info" control-label="">구조화 작업 정보</label>
+                    </td>
+                    <td>
+                        <textarea class="form-control" id="structuring_info" name="structuring_info" placeholder="구조화 작업 정보" rows="3">{{ item.structuring_info }}</textarea>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="well well-sm">
+            <button type="submit" class="btn btn-sm btn-primary">저장 <i class="fa fa-save"></i></button>
+            <a href="/back" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="뒤로">
+            <span class="sr-only">뒤로</span>
+            <i class="fa fa-arrow-left"></i>
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}<!--edit_form-->
+
+{{ lib.panel_end() }}
+{% endblock %}<!--content-->
+
+{% block add_tail_js %}
+<script src="{{url_for('appbuilder.static',filename='js/ab_keep_tab.js')}}" nonce="{{ baselib.get_nonce() }}"></script>
+{% endblock %}<!--add_tail_js-->

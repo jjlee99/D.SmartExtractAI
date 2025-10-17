@@ -1,0 +1,187 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+{% import 'form/layout/js/layout_block_edit_js.html' as js %}
+
+{% block content %}
+{{ lib.panel_begin(title) }}
+
+{% block add_form %}
+<style>
+    .canvas-container {
+        width:100%;
+        height:800px;
+        overflow: hidden;
+        background: #c7c7c7;
+    }
+    #canvas {
+        width: 100%;       /* container 꽉 채우기 */
+        height: 100%;
+        display: block;    /* subpixel gap 방지 */
+    }
+    .dialog-container {
+      display: none;
+      position: absolute;
+      background: #fff;
+      z-index: 1050;
+      padding: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 4px;
+      font-size: 13px;
+      width: 420px;
+    }
+    .block-table{
+        margin-bottom: 0;
+    }
+    /* 안쪽 세로줄만 */
+    .block-table th + th,
+    .block-table td + td {
+        border-left: 1px solid #ccc;
+    }
+    .block-table td,
+    .block-table th{
+        text-align: center;
+    }
+    .block-table-wrapper {
+        max-height: 585px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+    }
+</style>
+<!-- 툴바 영역 -->
+<div class="well well-sm clearfix">
+    <div class="pull-left">
+        <button id="btn_zoom_in" class="btn btn-default btn-sm">확대</button>
+        <button id="btn_zoom_out" class="btn btn-default btn-sm">축소</button>
+        <button id="btn_pan" class="btn btn-default btn-sm">이동</button>
+        <button id="btn_select" class="btn btn-default btn-sm">선택</button>
+        <button id="btn_reset" class="btn btn-default btn-sm">초기화</button>
+        <span id="zoom_label" style="margin-left: 15px; font-weight: bold;">
+            Zoom level: 1.0000
+        </span>
+    </div>
+    <div class="pull-right">
+        <button id="btn_save" class="btn btn-sm btn-primary">저장<i class="fa fa-save"></i></button>
+        <button id="btn_back" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="뒤로" data-original-title="뒤로">
+        <i class="fa fa-arrow-left"></i>
+        </button>
+    </div>
+</div>
+
+
+<!-- 탭 컨텐츠 -->
+<div id="Home" class="tab-pane active">
+    <form id="model_form" action="" method="post" enctype="multipart/form-data">
+        <!-- 메인 레이아웃 그리드 -->
+        <div class="row">
+            <!-- 좌측 캔버스 영역 -->
+            <div class="col-md-7">
+                <div class="panel panel-default">
+                    <div class="panel-body">
+                        <ul class="main list-unstyled">
+                            <li class="canvasArea">
+                                <div class="canvas-container">
+                                    <canvas id="canvas"></canvas>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <!-- 우측 영역 폼 영역 -->
+            <div class="col-md-5">
+                <div class="panel panel-default aside">
+                    <div class="panel-body">
+                        {# <input type="hidden" id="doc_class_id" name="doc_class_id" value="{{ item.doc_class_id }}"> #}
+                        <input type="hidden" id="layout_class_id" name="layout_class_id" value="{{ item.layout_class_id }}">
+                        <input type="hidden" class="inputBox" id="object_id_box" readonly><br>
+
+                        <table class="table table-condensed table-hover geometryTable">
+                            <colgroup>
+                                <col style="width: 30%;">
+                                <col style="width: 70%;">
+                            </colgroup>
+                            <tbody>
+                                <tr>
+                                    <td>구역 명</td>
+                                    <td><input type="text" class="form-control input-sm" id="section_name" placeholder="구역명" readonly></td>
+                                </tr>
+                                <tr>
+                                    <td>좌표</td>
+                                    <td>
+                                        <input type="text" class="form-control input-sm" id="rect" placeholder="객체 좌표" readonly>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td>구역 구분</td>
+                                    <td>
+                                        {% if section_type_list and section_type_list|length > 0 %}
+                                        <select class="form-control input-sm" name="section_type" id="section_type" required readonly disabled>
+                                            <option value="" disabled selected>구역 타입을 선택해주세요.</option>
+                                            {% for section_type in section_type_list %}
+                                                <option value="{{ section_type.cd_val }}">{{ section_type.cd_nm }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        {% else %}
+                                        <span class="help-block">구역 타입 데이터가 없습니다. 먼저 등록하세요.</span>
+                                        <select name="sectionType" id="sectionType" style="display: none"></select>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>블록 스타일</td>
+                                    <td>
+                                        {% if separate_block_list and separate_block_list|length > 0 %}
+                                        <select class="form-control input-sm" name="separate_block_type" id="separate_block_type" required readonly disabled>
+                                            <option value="" disabled selected>블록 스타일을 선택해주세요.</option>
+                                            {% for separate_block in separate_block_list %}
+                                                <option value="{{ separate_block.oprtn_set_id }}" title="{{separate_block.oprtn_set_desc}}">{{ separate_block.oprtn_set_nm }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        {% else %}
+                                        <span class="help-block">블록 스타일 데이터가 없습니다. 먼저 등록하세요.</span>
+                                        <select name="separate_block_type" id="separate_block_type" style="display: none"></select>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- 우측 블록 폼 영역 -->
+            <div class="col-md-5">
+                <div class="block-table-wrapper">
+                    <table class="table table-condensed table-hover block-table">
+                        <colgroup>
+                                <col style="width: 2%;">
+                            <col style="width: 12%;">
+                            <col style="width: 28%;">
+                            <col style="width: 28%;">
+                            <col style="width: 28%;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>행/열</th>
+                                <th>구분</th>
+                                <th>텍스트</th>
+                                <th>테이블</th>
+                                <th>컬럼</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5">현재 선택한 영역이 없습니다.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{{ js.content() | safe }}
+{% endblock %}
+
+{{ lib.panel_end() }}
+{% endblock %}

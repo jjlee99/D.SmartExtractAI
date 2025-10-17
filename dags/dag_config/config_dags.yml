@@ -1,0 +1,41 @@
+# dags/config_dags.yml
+
+# 첫 번째 DAG 정의
+simple_bash_dag:
+  dag_id: simple_bash_pipeline
+  default_args:
+    owner: 'airflow'
+    start_date: 2024-01-01
+    retries: 1
+  schedule: '0 1 * * *' # 매일 새벽 1시
+  tags:
+    - 'bash'
+    - 'simple'
+  tasks:
+    start_task:
+      operator: 'airflow.operators.bash.BashOperator'
+      bash_command: 'echo "Start Task [{{ ti.task_id }}] successful at {{ ds }}";'
+    process_data:
+      operator: 'airflow.operators.bash.BashOperator'
+      bash_command: 'echo "Data processing simulation completed.";'
+      dependencies:
+        - start_task
+    end_task:
+      operator: 'airflow.operators.bash.BashOperator'
+      bash_command: 'echo "Pipeline Finished!"'
+      dependencies:
+        - process_data
+
+# 두 번째 DAG 정의 (다른 DAG ID)
+another_example_dag:
+  dag_id: another_example_pipeline
+  default_args:
+    owner: 'airflow'
+    start_date: 2024-05-01
+  schedule: '@hourly'
+  tags:
+    - 'hourly'
+  tasks:
+    check_condition:
+      operator: 'airflow.operators.bash.BashOperator'
+      bash_command: 'echo "Checking system status..."'

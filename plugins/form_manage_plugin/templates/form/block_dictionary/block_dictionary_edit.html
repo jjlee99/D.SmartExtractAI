@@ -1,0 +1,48 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/baselib.html' as baselib %}
+{% import 'appbuilder/general/lib.html' as genlib %}
+
+{% block content %}
+{{ genlib.panel_begin(title) }}
+
+<form method="post" action="{{ url_for(modelview_name + '.edit', pk=data.block_crctn_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label>서식명</label>
+    <input type="text" class="form-control" value="{{ data.doc_nm }}" readonly>
+  </div>
+
+  <div class="form-group">
+    <label>레이아웃명</label>
+    <input type="text" class="form-control" value="{{ data.layout_nm }}" readonly>
+  </div>
+
+  <div class="form-group">
+    <label>섹션명</label>
+    <input type="text" class="form-control" value="{{ data.section_nm }}" readonly>
+  </div>
+
+  <div class="form-group">
+    <label>블록 행/열</label>
+    <input type="text" class="form-control" value="{{ data.block_pos }}" readonly>
+  </div>
+
+  <div class="form-group">
+    <label>교정대상단어</label>
+    <input type="text" class="form-control" name="error_text" value="{{ data.error_text }}">
+  </div>
+
+  <div class="form-group">
+    <label>교정단어</label>
+    <input type="text" class="form-control" name="crrct_text" value="{{ data.crrct_text }}">
+  </div>
+
+  <div class="text-right mt-3">
+    <button type="submit" class="btn btn-primary">저장</button>
+    <a href="{{ url_for('BlockDictionaryManageView.list') }}" class="btn btn-default">취소</a>
+  </div>
+</form>
+
+{{ genlib.panel_end() }}
+{% endblock %}

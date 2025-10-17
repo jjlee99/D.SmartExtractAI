@@ -1,0 +1,98 @@
+{% extends "appbuilder/base.html" %}
+{% import 'general/lib.html' as mylib %}
+{% import 'appbuilder/general/lib.html' as genlib %}
+
+{% block content %}
+{{ genlib.panel_begin(title, "show") }}
+
+{% block show_form %}
+<div id="Home" class="tab-pane active">
+    <div class="modal fade" id="modal-confirm" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                <h4 class="modal-title" id="myModalLabel">경고</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-text"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <a href="#" id="modal-confirm-ok" class="btn btn-danger danger" title="">OK</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="modal-alert" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <div><h4 class="modal-text"></h4></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">문서 클래스 정보</th>
+                <td><span style="white-space: pre-line">{{item.doc_class_info}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">레이아웃 클래스 ID</th>
+                <td><span style="white-space: pre-line">{{item.layout_class_id}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">레이아웃명</th>
+                <td><span style="white-space: pre-line">{{item.layout_name}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">설명</th>
+                <td><span style="white-space: pre-line">{{item.layout_desc}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">사용여부</th>
+                <td><span style="white-space: pre-line">{{item.use_yn}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">순서</th>
+                <td><span style="white-space: pre-line">{{item.layout_order}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">이미지 전처리 정보</th>
+                <td><span style="white-space: pre-line">{{item.img_preprocess_info}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">분류 ai 정보</th>
+                <td><span style="white-space: pre-line">{{item.classify_ai_info}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">생성일</th>
+                <td><span style="white-space: pre-line">{{item.rgdt}}</span></td>
+            </tr>
+            <tr>
+                <th class="col-lg-2 col-md-2 col-sm-2">수정일</th>
+                <td><span style="white-space: pre-line">{{item.updt}}</span></td>
+            </tr>
+        </table>
+    </div>
+    <div class="well well-sm">
+        <a href="/back" class="btn btn-sm btn-default" data-toggle="tooltip" title="">
+            <span class="sr-only">뒤로</span>
+            <i class="fa fa-arrow-left"></i>
+        </a>
+    </div>
+</div>
+{% endblock show_form %}
+
+{% if related_views is defined %}</div>{% endif %}
+{{ genlib.panel_end() }}
+
+{% endblock content %}
+
+{% block add_tail_js %}
+<script src="{{url_for('appbuilder.static',filename='js/ab_keep_tab.js')}}" nonce="{{ baselib.get_nonce() }}"></script>
+{% endblock %}

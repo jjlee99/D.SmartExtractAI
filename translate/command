@@ -1,0 +1,131 @@
+# airflow 라이브러리 설치 시에는 컨테이너 중 scheduler에 설치하면 된다.
+
+# #origianl_airflow 생성 명령어
+# cd /home/digital-033/work/docker/digitalflow/translate
+# docker cp digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow ./original_airflow
+
+#airflow 내 webserver 수정
+cd /home/digital-033/work/docker/digitalflow/translate
+docker cp /home/digital-033/work/docker/digitalflow/translate/custom_airflow/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/
+
+# login 페이지 수정
+cd /home/digital-033/work/docker/digitalflow/translate
+docker cp /home/digital-033/work/docker/digitalflow/translate/custom_flask_appbuilder/templates/appbuilder/general/security/login_db.html digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/templates/appbuilder/general/security/.
+
+# 웹서버 root 접속 명령어
+docker exec -it --user airflow digitalflow-airflow-worker-1 bash
+docker exec -it --user airflow digitalflow-airflow-webserver-1 bash
+docker exec -it --user airflow digitalflow-airflow-triggerer-1 bash
+docker exec -it --user airflow digitalflow-airflow-scheduler-1 bash
+docker exec -it digitalflow-postgres-1 bash
+docker exec -it --user airflow digitalflow-redis-1 bash
+
+
+docker exec -it --user root digitalflow-airflow-worker-1 bash
+docker exec -it --user root digitalflow-airflow-webserver-1 bash
+docker exec -it --user root digitalflow-airflow-triggerer-1 bash
+docker exec -it --user root digitalflow-airflow-scheduler-1 bash
+docker exec -it --user root digitalflow-postgres-1 bash
+docker exec -it --user root digitalflow-redis-1 bash
+
+#현재 폴더 내 용량 큰 파일/폴더 찾기 명령어(큰파일을 위로)
+du -sh ./* ./.??* | sort -hr | head -20
+#디스크 사용량 확인
+df -h .
+
+#하드디스크 용량 클리어(Docker 가상 머신 디스크 파일 삭제) - 삭제 후 재빌드 필수
+rm ~/.docker/desktop/vms/0/data/Docker.raw
+
+#connections 등록 실패 시 실행 명령어
+airflow connections add "maria_db_conn" --conn-type "mysql" --conn-host "192.168.10.18" --conn-login "digitalflow" --conn-password "digital10" --conn-port "3306" --conn-schema "dococr"
+
+#로그 출력용
+docker logs --tail 300 digitalflow-airflow-webserver-1
+docker logs --tail 300 digitalflow-airflow-scheduler-1
+
+#tranaslate 복사(bash)
+docker cp /home/digital-033/work/docker/digitalflow/translate/custom_airflow/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/
+docker cp /home/digital-033/work/docker/digitalflow/translate/custom_flask_appbuilder/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/
+
+#tranaslate 원상복구(bash)
+docker cp /home/digital-033/work/docker/digitalflow/translate/original_airflow/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/
+docker cp /home/digital-033/work/docker/digitalflow/translate/original_flask_appbuilder/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/
+
+#translate 백업(bash)
+docker cp digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow /home/digital-033/work/docker/digitalflow/translate/original_airflow
+docker cp digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder /home/digital-033/work/docker/digitalflow/translate/original_flask_appbuilder
+
+# dockerfile용 복사 명령어
+# COPY translate/custom_airflow/. /home/airflow/.local/lib/python3.12/site-packages/airflow/
+# COPY translate/custom_flask_appbuilder/. /home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/
+
+# 국제화를 위한 명령어
+# 0. babel.cfg 파일 생성(대상함수를 사용중인 키워드 수집 설정)
+# 1. 작업 디렉토리로 이동
+cd /home/digital-033/work/docker/digitalflow
+# 2. 프로젝트 내에서 설정파일을 기반으로 키워드 수집
+pybabel extract -k _ -k lazy_gettext -F ./plugins/translations/babel.cfg -o ./plugins/translations/plugins.pot .
+# 3. 수집된 키워드를 기반으로 언어별 PO파일 업데이트(ko)
+pybabel update -i ./plugins/translations/plugins.pot -d ./plugins/translations -l ko
+  # 3-1. 파일이 없는 경우 init 사용
+  #pybabel init -i ./plugins/translations/plugins.pot -d ./plugins/translations -l ko
+# 4. PO파일을 편집기로 열어 번역문 입력
+# 5. PO파일 병합(여러 플러그인 사용 시)
+msgcat --use-first ./translate/custom_flask_appbuilder/translations/ko/LC_MESSAGES/messages.po ./plugins/translations/ko/LC_MESSAGES/messages.po -o ./translate/custom_flask_appbuilder/translations/ko/LC_MESSAGES/messages.po
+# 6. 편집된 PO파일을 기반으로 MO파일 생성
+pybabel compile -d ./translate/custom_flask_appbuilder/translations -l ko
+# 7. mo 파일 적용
+docker cp /home/digital-033/work/docker/digitalflow/translate/custom_flask_appbuilder/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/
+# 8. docker 재시작
+~/rs_digitalflow.sh
+
+
+# airflow postgresql 접속방법
+# 1. docker 컨테이너 접속
+docker exec -it digitalflow-postgres-1 bash
+# 2. psql 접속
+psql -U airflow -d airflow
+# 3. ab_user 조회
+select * from ab_user;
+UPDATE ab_user SET active = 't' WHERE username = 'D.SmartExtractAI';
+
+; #custom_static에 있는 파일들을 docker에 복사
+; cd /home/digital-033/work/docker/digitalflow/translate/www_custom
+; docker cp /home/digital-033/work/docker/digitalflow/translate/www_custom/custom_static/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/www/static/
+
+; #custom_template에 있는 파일들을 docker에 복사
+; cd /home/digital-033/work/docker/digitalflow/translate/www_custom
+; docker cp /home/digital-033/work/docker/digitalflow/translate/www_custom/custom_templates/. digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/www/templates/
+; #custom_extensions에 있는 파일들을 docker에 복사
+; cd /home/digital-033/work/docker/digitalflow/translate/www_custom
+; docker cp /home/digital-033/work/docker/digitalflow/translate/www_custom/custom_extensions/. 
+; digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/www/extensions/
+
+
+; #airflow 상단의 security 메뉴 수정을 위한 파일 수정.
+; cd /home/digital-033/work/docker/digitalflow/translate/providers_custom
+; docker cp /home/digital-033/work/docker/digitalflow/translate/providers_custom/fab_custom/auth_manager_custom/security_manager/override.py digitalflow-airflow-webserver-1:/home/airflow/.local/lib/python3.12/site-packages/airflow/providers/fab/auth_manager/security_manager/
+
+
+# 브랜드 로고는 /home/airflow/.local/lib/python3.12/site-packages/airflow/www/templates/appbuilder/navbar.html안에 있음
+<svg class="brand-logo" viewBox="0 0 104 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+# 이 부분을 디지탈쉽 로고에 맞게 변경. -> js파일 수정해야함.
+<img class="brand-logo" src="/static/dship.png" alt="Company Logo">
+
+# 로고 크기 변경 
+
+/home/digital-033/work/docker/digitalflow/translate/custom_airflow/www/static/dist/main.fb487bd34c7cd20f02bc.css
+# 기존 width: 180px; height: 81px -> width: 90px; height: 40.5px;
+
+# 메인 화면 상의 영어, 한글화 진행중.
+/home/digital-033/work/docker/digitalflow/translate/www_custom/custom_templates/airflow/dags.html
+# 위 파일의 한국어 입력 부분 참조
+
+
+# 메인 화면 하단의 버전 한글화
+/home/digital-033/work/docker/digitalflow/translate/www_custom/custom_templates/airflow/main.html
+
+
+
+# 메인 화면 상단의 헤더 변경 중
+/home/digital-033/work/docker/digitalflow/translate/www_custom/custom_extensions/init_appbuilder_links.py

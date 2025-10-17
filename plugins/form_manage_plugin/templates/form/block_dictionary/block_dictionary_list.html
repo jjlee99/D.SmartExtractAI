@@ -1,0 +1,182 @@
+{% extends "appbuilder/base.html" %}
+{% import 'general/lib.html' as mylib %}
+{% import 'appbuilder/general/lib.html' as genlib %}
+{% import 'appbuilder/baselib.html' as baselib %}
+
+{% set can_add = "can_add" | is_item_visible(modelview_name) %}
+
+{% block content %}
+{{ genlib.panel_begin(title) }}
+
+    <div class="well well-sm">
+        {% block list_header scoped %}
+            {{ mylib.render_list_header(can_add, page, page_size, count, actions, modelview_name) }}
+        {% endblock %}
+    </div>
+
+<!-- 검색폼 -->
+{% block list_search scoped %}
+    {% set is_open = request.args|length > 0 %}
+    {% call genlib.accordion_tag("accordion1", _("Search"), is_open) %}
+            <form class="form-inline" method="get" action="{{ url_for(modelview_name + '.list') }}">
+                <div class="row" style="width:100%; margin:0;">
+                    <div class="col-md-10">
+                        <div class="form-group" style="margin-right:10px; margin-bottom:5px;">
+                            <label style="margin-right:5px;">서식명</label>
+                            <select id="doc_id" name="doc_id" class="form-control">
+                                <option value="">전체</option>
+                                {% for doc in doc_list %}
+                                <option value="{{ doc.id }}" {% if request.args.get('doc_id') == doc.id|string %}selected{% endif %}>{{ doc.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-right:10px; margin-bottom:5px;">
+                            <label style="margin-right:5px;">레이아웃명</label>
+                            <select id="layout_id" name="layout_id" class="form-control">
+                                <option value="">전체</option>
+                                {% for layout in layout_list %}
+                                <option value="{{ layout.id }}" {% if request.args.get('layout_id') == layout.id|string %}selected{% endif %}>{{ layout.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-right:10px; margin-bottom:5px;">
+                            <label style="margin-right:5px;">섹션명</label>
+                            <select id="section_id" name="section_id" class="form-control">
+                                <option value="">전체</option>
+                                {% for sec in section_list %}
+                                <option value="{{ sec.id }}" {% if request.args.get('section_id') == sec.id|string %}selected{% endif %}>{{ sec.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-right:10px; margin-bottom:5px;">
+                            <label style="margin-right:5px;">교정대상단어</label>
+                            <input type="text" name="error_text" class="form-control" value="{{ request.args.get('error_text','') }}">
+                        </div>
+
+                        <div class="form-group" style="margin-right:10px; margin-bottom:5px;">
+                            <label style="margin-right:5px;">교정단어</label>
+                            <input type="text" name="crrct_text" class="form-control" value="{{ request.args.get('crrct_text','') }}">
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-right">
+                        <button type="submit" class="btn btn-primary">검색</button>
+                        <a href="{{ url_for(modelview_name + '.list') }}" class="btn btn-default">초기화</a>
+                    </div>
+                </div>
+            </form>
+        {% endcall %}
+    {% endblock %}
+<hr>
+
+<!-- 목록 테이블 -->
+{% block list_list scoped %}
+<div>
+  {% if count > 0 %}
+    {% block begin_content scoped %}
+      <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+    {% endblock %}
+
+    {% block begin_loop_header scoped %}
+      <thead>
+        <tr>
+          {% if actions %}
+          <th class="action_checkboxes">
+            <input id="check_all" class="action_check_all" name="check_all" type="checkbox">
+          </th>
+          {% endif %}
+
+          {% if can_edit or can_delete %}
+          <th class="col-md-1 col-lg-1 col-sm-1"></th>
+          {% endif %}
+
+          {% for item in include_columns %}
+            <th>{{ label_columns.get(item, item) }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+    {% endblock %}
+
+    {% block begin_loop_values scoped %}
+      {% for item in value_columns %}
+        {% set pk = pks[loop.index0] %}
+        <tr>
+          {% if actions %}
+          <td>
+            <input id="{{ pk }}" class="action_check" name="rowid" value="{{ pk }}" type="checkbox">
+          </td>
+          {% endif %}
+
+          {% if can_edit or can_delete %}
+          <td>
+            <center>
+              {{ mylib.btn_crud(False, can_edit, can_delete, pk, modelview_name) }}
+            </center>
+          </td>
+          {% endif %}
+
+          {% for col in include_columns %}
+            {% set formatter = formatters_columns.get(col) %}
+            {% if formatter %}
+              <td>{{ formatter(item[col]) }}</td>
+            {% else %}
+              <td>{{ item[col] }}</td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    {% endblock %}
+
+    {% block end_content scoped %}
+        </table>
+      </div>
+    {% endblock %}
+
+    {{ genlib.action_form(actions, modelview_name) }}
+
+    <script nonce="{{ baselib.get_nonce() }}">
+      $(document).ready(function() {
+        window.modelActions = new AdminActions();
+      });
+    </script>
+
+  {% else %}
+    <b>{{ _("No records found") }}</b>
+  {% endif %}
+</div>
+{% endblock %}
+
+{{ genlib.panel_end() }}
+
+<script nonce="{{ baselib.get_nonce() }}">
+// 셀렉트박스 연동 (AJAX)
+$('#doc_id').change(function() {
+  const docId = $(this).val();
+  $('#layout_id').empty().append('<option value="">전체</option>');
+  $('#section_id').empty().append('<option value="">전체</option>');
+  if(docId){
+    $.getJSON(`/block_dictionary/layouts/${docId}`, function(data){
+      data.forEach(function(item){
+        $('#layout_id').append(`<option value="${item.id}">${item.name}</option>`);
+      });
+    });
+  }
+});
+
+$('#layout_id').change(function(){
+  const layoutId = $(this).val();
+  $('#section_id').empty().append('<option value="">전체</option>');
+  if(layoutId){
+    $.getJSON(`/block_dictionary/sections/${layoutId}`, function(data){
+      data.forEach(function(item){
+        $('#section_id').append(`<option value="${item.id}">${item.name}</option>`);
+      });
+    });
+  }
+});
+</script>
+
+{% endblock %}
