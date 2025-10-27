@@ -21,10 +21,10 @@ class SectionClassManageView(FormManageModelView):
     endpoint = "section"
     
     # 타이틀
-    list_title = _("작업구역 목록")
-    show_title = _("작업구역 상세")
-    add_title = _("작업구역 추가")
-    edit_title = _("작업구역 수정")
+    list_title = _("구역 목록")
+    show_title = _("구역 상세")
+    add_title = _("구역 추가")
+    edit_title = _("구역 수정")
 
     #템플릿 경로
     list_template = "form/section/section_list.html"
@@ -34,21 +34,21 @@ class SectionClassManageView(FormManageModelView):
 
     #공통정보
     label_columns = {
-        "section_name": _("작업구역명"),
-        "doc_class_id": _("문서서식ID"),
-        "section_type": _("작업구역 타입"),
+        "section_name": _("구역명"),
+        "doc_class_id": _("문서명ID"),
+        "section_type": _("구역 타입"),
         "section_desc": _("설명"),
         "section_order": _("순서"),
-        "separate_section_info": _("작업구역 설정 정보"),
-        "separate_block_info": _("작업구역 블록화 정보"),
+        "separate_section_info": _("구역 설정 정보"),
+        "separate_block_info": _("구역 블록화 정보"),
         "ocr_info": _("OCR 정보"),
         "cleansing_info": _("정제 정보"),
         "structuring_info": _("구조화 정보"),
         "rgdt": _("생성일"),
         "updt": _("수정일"),
-        "doc_class_info": _("문서서식"),
+        "doc_class_info": _("문서명"),
         "layout_class_info": _("레이아웃"),
-        "block_type": _("작업구역 블록타입"),
+        "block_type": _("구역 블록타입"),
     }
     def text_formatter(value):
         if value is not None:
@@ -58,7 +58,7 @@ class SectionClassManageView(FormManageModelView):
     formatters_columns = {"section_name": text_formatter}
     
     #입력(등록/수정) 폼 정보
-    description_columns = {"section_name": _("구별을 위한 작업구역명을 입력하세요."),}
+    description_columns = {"section_name": _("구별을 위한 구역명을 입력하세요."),}
     type_columns = {
         "section_name": "string",
         "doc_class_id": "string",
@@ -150,7 +150,7 @@ class SectionClassManageView(FormManageModelView):
     @expose("/add", methods=["GET", "POST"])
     @has_access
     def add(self):
-        flash("작업구역의 추가는 레이아웃 설정에서 가능합니다.", "warning")
+        flash("구역의 추가는 레이아웃 설정에서 가능합니다.", "warning")
         return redirect("/layout/list")
 
     @expose("/show/<pk>", methods=["GET"])
@@ -214,7 +214,7 @@ class SectionClassManageView(FormManageModelView):
         if not item:
             abort(404)
         try:
-            # 작업구역은 삭제 전 체크 필요없음
+            # 구역은 삭제 전 체크 필요없음
             pass
         except Exception as e:
             print("에러 메시지:", e)

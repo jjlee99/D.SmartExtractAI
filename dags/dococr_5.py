@@ -1,54 +1,36 @@
-# def sample_task():
-#     print("Hello, Airflow!")
-
-# # 여러 DAG에서 동일한 태스크를 사용
-# task_configs = {
-#     "task_1": sample_task,
-#     "task_2": sample_task
-# }
-
-
-import json
-from airflow.operators.python import PythonOperator
-from airflow.decorators import task, task_group
-from airflow.models import Variable
-from pathlib import Path
-
-# --- 필요한 모듈 임포트 (기존 DAG 파일 참조) ---
-# tasks/와 utils/db/ 경로가 Airflow PYTHONPATH에 설정되어 있어야 합니다.
-# 경로는 사용자 환경에 맞게 조정해야 합니다.
-# **주의:** dococr_query_util 임포트 경로가 맞는지 확인해야 합니다.
-# 기존 DAG 파일 경로: from utils.db import dococr_query_util
+from airflow import DAG
+from datetime import datetime
+from tasks.common.file_task import clear_temp_folder_task, save_file_info_task
+from tasks.common.setup_task import final_cleanup, setup_runtime, get_success_results, get_failed_results, end_runtime
 from tasks.doc_ocr.export_output_task import export_output_task
 from tasks.doc_ocr.translate_output_task import translate_output_task
 from tasks.doc_ocr.ocr_task import ocr_task, aggregate_ocr_results_task
-from tasks.common.file_task import clear_temp_folder_task, save_file_info_task
-from tasks.common.setup_task import setup_runtime, get_success_results, get_failed_results, end_runtime
 from tasks.doc_ocr.setup_task import check_file_exists, setup_target_file_list, setup_layout_list_task, failed_result_task, setup_table_list, complete_runtime
 from tasks.doc_ocr.img_preprocess_task import img_preprocess_task 
 from tasks.doc_ocr.img_classify_task import img_classify_task, aggregate_classify_results_task
 
-#RESULT_FOLDER = Variable.get("RESULT_FOLDER", default_var="/opt/airflow/data/upload")
-UPLOAD_FOLDER = Variable.get("UPLOAD_FOLDER", default_var="/opt/airflow/data/upload")
-
-
-def get_task_definitions(doc_class_id):
-    """
-    특정 DOC_CLASS_ID에 대한 전체 태스크 플로우를 정의하고 의존성을 설정합니다.
-    이 함수는 factory.py의 with DAG(..) as dag: 컨텍스트 내에서 호출됩니다.
-    """
+# DAG 정의 (DAG 클래스 직접 사용)
+with DAG(
+    dag_id="dococr_5", # 이전 DAG ID와 충돌 방지를 위해 변경
+    description="일반건축물대장<5> 데이터 추출 프로세스",
+    start_date=datetime(2024, 1, 1),
+    schedule=None, # None으로 설정하면 수동 트리거만 가능
+    catchup=False,
+    on_failure_callback= final_cleanup,
+    tags=[]
+) as dag:
     t_img_classify_runtime_setup = setup_runtime()
-    
+    doc_class_id = "5"
     # 1. 작업 대상 파일 로드
-    b_check_file_exists = check_file_exists(UPLOAD_FOLDER)
+    b_check_file_exists = check_file_exists()
     t_no_file_end = end_runtime("폴더 안에 파일이 존재하지 않습니다.")
-    t_get_file_info_list = setup_target_file_list(UPLOAD_FOLDER)
+    t_get_file_info_list = setup_target_file_list()
     # 1-z. 실행순서
     t_img_classify_runtime_setup >> b_check_file_exists >> [t_no_file_end,t_get_file_info_list]
     
     # 2. 클래스 분류를 위한 각 클래스 전처리 작업
     # 2-1. 클래스 지정. (나중에 클래스 목록 가져오는 함수로 변경)
-    t_layout_list = setup_layout_list_task(str(doc_class_id))
+    t_layout_list = setup_layout_list_task(doc_class_id)
     
     # 2-2. 분류 전처리 작업 실행
     t_classify_preprocess_task = img_preprocess_task.partial(layout_list=t_layout_list,target_key="_origin").expand(file_info=t_get_file_info_list)
@@ -59,7 +41,7 @@ def get_task_definitions(doc_class_id):
     t_fail_classify_preprc = failed_result_task.override(task_id="fail_classify_preprc").expand(file_info=t_classify_preprc_failed_results)
 
     # 2-y. 분류 전처리 후 결과 이미지 취합용(분류 작업 확인용)
-    #t_classify_preprc_result = copy_results_folder_task(t_classify_preprc_success_results, dest_folder=RESULT_FOLDER, last_folder=str(doc_class_id))
+    #t_classify_preprc_result = copy_results_folder_task(t_classify_preprc_success_results, dest_folder=RESULT_FOLDER, last_folder=doc_class_id)
 
     # 2-z. 실행순서
     t_get_file_info_list >> t_layout_list >> t_classify_preprocess_task >> [t_classify_preprc_success_results, t_classify_preprc_failed_results]

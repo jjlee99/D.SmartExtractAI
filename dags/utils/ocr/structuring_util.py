@@ -1,5 +1,6 @@
 from collections import defaultdict
 import copy
+import json
 from pathlib import Path
 from airflow.models import Variable
 from typing import Any
@@ -65,7 +66,7 @@ def structuring_step_list(block_list: list[tuple[Any,dict]], step_list:dict=None
         function_info = function_map[stepinfo["name"]]
         input = output
         output = function_info["function"](input,**stepinfo["param"],result_map=result_map)
-    return result_map["result"]
+    return result_map
 
 def structuring_by_type(
     block_list: list[tuple[Any,dict]],
@@ -79,7 +80,7 @@ def structuring_by_type(
     section_name = block_list[0][1].get("section_name","unknown_section")
     section_type = block_list[0][1].get("section_type","MULTI_ROW")
 
-    print("kkkkkkkkkkkkkkkkkkkkkkkkkdd",block_list[0][1].get("page_num",-1))
+    print("kkkkkkkkkkkkkkkkkkkkkkkkkdd",block_list[0][1].get("page_num",-1), section_class_id, section_name, section_type)
     templete_block_list = dococr_query_util.select_list_map("selectBlockList",(section_class_id,))
         
     #구역 타입에 따라 처리(STATIC_TEXT,ONE_ROW,MULTI_ROW)
@@ -109,8 +110,8 @@ def structuring_by_type(
             
             block_text = block_data[1].get("ocr",{}).get("text","")
             if block_type == "key":
-                if block_text != default_text:
-                    _save_block_check_error(section_class_id,section_name,block_data,template_block,block_text,result_map)
+                if block_text.replace(' ', '') != default_text.replace(' ', ''):
+                    _save_block_check_error(block_data,template_block,block_text,result_map)
                 else:
                     print(";;;;;;;;;;데이터일치",block_text, default_text)
             elif block_type == "val":
@@ -174,8 +175,8 @@ def structuring_by_type(
             
             block_text = block_data[1].get("ocr",{}).get("text","")
             if block_type == "key":
-                if block_text != default_text:
-                    _save_block_check_error(section_class_id,section_name,block_data,template_block,block_text,result_map)
+                if block_text.replace(' ', '') != default_text.replace(' ', ''):
+                    _save_block_check_error(block_data,template_block,block_text,result_map)
                 else:
                     print(";;;;;;;;;;데이터일치",block_text, default_text)
             elif block_type == "val":
@@ -205,22 +206,25 @@ def _get_text_info(block_map):
     text_info["structed_text"] = block_map.get("ocr",{}).get("text","")
     return text_info
 
-def _save_block_check_error(section_class_id,section_name,block_data,template_block,block_text,result_map):
+def _save_block_check_error(block_data,template_block,block_text,result_map):
     print("=]=[========데이터불일치",block_text, template_block["default_text"])
+    section_class_id = int(block_data[1]["section_class_id"])
+    page_num = int(block_data[1].get("page_num",""))
+    block_box = block_data[1].get("block_box","")
+    block_text = block_data[1].get("ocr","").get("text","")
     block_row_num = int(template_block["block_row_num"])
     block_col_num = int(template_block["block_col_num"])
     default_text = template_block["default_text"]
     
-    section_parent = dococr_query_util.select_row_map("selectSectionParent",(section_class_id,))
-    error_folder = Path(CLASS_FOLDER) / str(section_parent["doc_class_id"]) / str(section_parent["layout_class_id"]) / "error" / f"{section_class_id}_{section_name}"
-    error_img_path = str(error_folder / f"{block_row_num}_{block_col_num}_{result_map["process_id"]}.png")
-    error_json_path = str(error_folder / f"{block_row_num}_{block_col_num}_{result_map["process_id"]}.json")
-    error_json = block_data[1]
-    error_json["add_correction"] = {"section_class_id":section_class_id,"section_name":section_name,
-                                    "block_row_num":block_row_num,"block_col_num":block_col_num,"default_text":default_text,"error_text":block_text}
-    block_img = type_convert_util.convert_type(block_data[0],"np_bgr","file_path",params="")
-    file_util.file_copy(block_img,error_img_path)
-    json_util.save(error_json_path,error_json)
+    result_map.setdefault("error_match_list",[]).append({
+        "page_num": page_num,
+        "block_box": block_box,
+        "section_class_id":section_class_id,
+        "section_row":block_row_num,
+        "section_col":block_col_num,
+        "structed_text":block_text,
+        "default_text":default_text,
+    })
     #raise Exception("양식과 다른 곳이 발견되어 작업을 중단합니다. 관리자에게 문의하시기 바랍니다.")
 
 def _save_no_block_error(section_class_id,section_name,block_list,template_block,result_map):

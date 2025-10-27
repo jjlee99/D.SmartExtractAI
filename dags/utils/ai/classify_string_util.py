@@ -80,7 +80,8 @@ def classify_string_step_list(data:dict, step_list:List=None, result_map:dict=No
     return result_map
 
 def contain_check(data:str, correct_text:str="",target_key:str="_strcomp", result_map:dict=None,**context):
-    full_term = correct_text
+    full_term = correct_text.replace(" ", "")
+    target_str = data.replace(" ", "")
     # 1. 2의 거듭제곱 단위 부분 문자열 생성
     def generate_substrings_by_powers_of_two(text):
         substrings = set()
@@ -158,13 +159,17 @@ def contain_check(data:str, correct_text:str="",target_key:str="_strcomp", resul
         norm_density = max_density / norm_denominator if norm_denominator else 0
         print("norm_density:", norm_density)
         #가중치를 추가하여 최종 점수 계산
-        final_score = min((match_score*match_weight + norm_density*density_weight),1)
+        weighted_score = match_score*match_weight + norm_density*density_weight
+        if weighted_score>1:
+            final_score = min(match_score*match_weight + norm_density*(1-match_weight),1)
+        else:
+            final_score = weighted_score
         print("final_score:", final_score)
         return final_score
     # 분석
     patterns = generate_substrings_by_powers_of_two(full_term) # 거듭제곱 단위의 부분 문자열 생성
-    matches = find_matches_with_positions(data, patterns)  # 부분 문자열 매칭 탐색
-    total_confidence = group_and_score(matches, len(full_term), len(data)) # 그룹화 및 점수 계산
+    matches = find_matches_with_positions(target_str, patterns)  # 부분 문자열 매칭 탐색
+    total_confidence = group_and_score(matches, len(full_term), len(target_str)) # 그룹화 및 점수 계산
     result_map[target_key] = total_confidence
     return data    
     

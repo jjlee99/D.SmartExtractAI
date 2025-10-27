@@ -255,8 +255,8 @@
             </td>
             <td>
               <a href="{{ url_for('Airflow.'+ dag.get_default_view(), dag_id=dag.dag_id) }}"
-                 title="{{ dag.description[0:80] + '…' if dag.description and dag.description|length > 80 else dag.description|default('', true) }}">
-                <strong title="{{ dag.dag_id }}">{{ dag.dag_display_name }}</strong>
+                 title="{{ dag.dag_display_name }}">
+                <strong>{{ dag.description | default(dag.dag_id, true) | truncate(80, true, '…') }}</strong>
               </a>
               <div>
                 {% for tag in dag.tags | sort(attribute='name') %}

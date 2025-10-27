@@ -785,6 +785,9 @@ def calc_angle_set2(img_np_bgr:np.ndarray,angle_key:str, result_map:dict,delta:f
         total_angle+=best_angle
         print(f"angle_score {idx}",total_angle,best_angle, max(scores), scores)
         
+        # 0도일 경우 반복 중지
+        if best_angle==0:
+            break
         # 3. 타겟이미지를 보정 각도만큼 회전
         rotated = _rotate(target_img,best_angle)
     
@@ -1107,7 +1110,8 @@ def _rotate(img_np_bgr: np.ndarray, angle:float) -> np.ndarray:
         borderValue=tuple(most_common.tolist())
     )
     return rotated
-
+{"name":"cache","cache_key":"_cut1"}
+{"name":"load","cache_key":"_cut1"}
 #이후
 function_map = {
     # 공통

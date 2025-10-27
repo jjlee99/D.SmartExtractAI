@@ -1,0 +1,111 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+{% import 'form/adjust/js/adjust_edit_js.html' as js %}
+
+{% block content %}
+{{ lib.panel_begin(title) }}
+{% block add_form %}
+<style>
+    .canvas-container {
+        width:100%;
+        height:800px;
+        overflow: hidden;
+        background: #c7c7c7;
+    }
+    .zoomLabel {
+        margin-left: 15px;
+        font-weight: bold;
+    }
+    .d-flex {
+        display: flex;
+    }
+    .justify-content-right {
+        justify-content:right;
+    }
+    .nav-bd-border {
+        min-height : 77vh;
+        border: 1px solid #ddd;
+        border-radius: 4px 4px 4px 0;
+        border-top: none;       
+    }
+    .mb-0 {
+        margin-bottom : 0rem;
+    }
+    .bg-color-ddd {
+        background-color : #dddddd;
+    }
+    .m-0 {
+        margin : 0rem;
+    }
+</style>
+
+<div class="row">
+    <div class="panel-body">
+        <div class="well well-sm" style="display: flex;"> 
+            <div class="col-md-7">
+                <button id="btnZoomIn" class="btn btn-default btn-sm">확대</button>
+                <button id="btnZoomOut" class="btn btn-default btn-sm">축소</button>
+                <button id="btnReset" class="btn btn-default btn-sm">초기화</button>
+                <span id="zoomLabel" class="zoomLabel">
+                    Zoom level: 1.0000
+                </span>
+            </div>
+            <div class="col-md-4">
+                <ul class="pagination pagination-sm m-0">
+                    <li class="prev">
+                        <a href=""><</a>
+                    </li>
+                    <li class="next">
+                        <a href="">></a>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-md-1">
+                <button type="button" id="btnUpdate" class="btn btn-sm btn-primary" style="margin-left: auto;">저장<i class="fa fa-save"></i></button>
+                <a id="btnBack" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="뒤로" data-original-title="뒤로">
+                    <span class="sr-only">뒤로</span>
+                    <i class="fa fa-arrow-left"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex">
+        <!-- 좌측 캔버스 영역 -->
+        <div class="col-md-7">
+            <div class="panel panel-default">
+                <div class="panel-body">
+                    <ul class="main list-unstyled">
+                        <li class="canvasArea">
+                            <div class="canvas-container">
+                                <canvas id="canvas"></canvas>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측 폼/아코디언 영역 -->
+        <div class="col-md-5">
+        
+            <ul class="nav nav-tabs" id="navigation"></ul>            
+        
+            <input type="hidden" id="adjust_id" name="adjust_id" value="{{ adjust_id }}">
+        
+            <div>
+                <div class="panel-body nav-bd-border">
+                    <div class="panel-group" id="accordion" role="tablist" aria-multiselectable="true">
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ js.content() | safe }}
+{% endblock %}
+
+{{ lib.panel_end() }}
+{% endblock %}
+

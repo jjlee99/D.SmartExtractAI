@@ -1,5 +1,6 @@
 import json, os
 from pathlib import Path
+import shutil
 import numpy as np
 import chardet
 from typing import Union, Any, List
@@ -48,16 +49,14 @@ def save(file_path:str, data:Any, duplicate_policy:str="exists_bakup")->None:
     try:
         if os.path.exists(file_path):
             if duplicate_policy == "exists_bakup": # 기존 파일 백업 후 생성
-                backup_path = file_path + ".bak"
-                file_util.file_copy(file_path, backup_path) 
-            elif duplicate_policy == "exists_bakup": # 기존 파일 백업 후 생성
-                dest = Path(file_path)
-                stem = dest.stem
-                suffix = dest.suffix
+                exists = Path(file_path)
+                stem = exists.stem
+                suffix = exists.suffix
                 count = 1
-                while dest.exists():
-                    dest = dest.parent / f"{stem}({count}){suffix}"
+                while exists.exists():
+                    exists = exists.parent / f"{stem}({count}){suffix}"
                     count += 1
+                shutil.copy2(file_path, exists)
             elif duplicate_policy == "skip": # 기존 파일 리턴
                 return file_path
             elif duplicate_policy == "overwrite": # 기존 파일 무시하고 덮어씀

@@ -134,8 +134,8 @@
                    {{ " disabled" if not can_edit_dag else "" }}>
             <span class="switch" aria-hidden="true"></span>
           </label>
-          <span class="text-muted">프로세스:</span> <span title="{{ dag.dag_id }}">{{ dag.dag_display_name }}</span>
-          <small class="text-muted">{{ dag.description[0:150] + '…' if dag.description and dag.description|length > 150 else dag.description|default('', true) }}</small>
+          <span class="text-muted">프로세스:</span> <span title="{{ dag.dag_id }}">{{ dag.description[0:150] + '…' if dag.description and dag.description|length > 150 else dag.description|default('', true) }}</span>
+          <small class="text-muted">{{ dag.dag_display_name }}</small>
           {% if dag_model is defined and dag_model.max_consecutive_failed_dag_runs is defined and  dag_model.max_consecutive_failed_dag_runs > 0  %}
            <span class="material-icons text-muted js-tooltip" aria-hidden="true" data-original-title="Auto Pauses: After {{ dag_model.max_consecutive_failed_dag_runs|string }} consecutive failures">motion_photos_paused</span>
             {% endif %}

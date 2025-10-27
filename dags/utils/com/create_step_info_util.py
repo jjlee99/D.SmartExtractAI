@@ -71,7 +71,6 @@ def ip_img_normalize(img_file_path:str, line_ratio:list=[0.2,0.2], result_map:di
     step07 = {"name":"rotate","param": {"angle_keys": ["angle2_1", "angle2_2", "angle2_3", "orient"]}}
     step08 = {"name":"del_blank_set2","param": {"line_ratios": [-1, -1], "padding_ratios": [-1,-1,-1,-1],"iter_save": True}} # 파라미터 조정 대상
     step09 = {"name":"scale2","param": {"calc_type":"long", "length":3150}} # 너비와 높이 중 긴 쪽이 3150이 되도록 조정
-    step10 = {"name":"save","param": {"save_key": "_normalize", "tmp_save": True}} # 결과 저장(분류 시 활용)
     
     #내부 파라미터 조정
     #step08 파라미터 조정
@@ -85,7 +84,7 @@ def ip_img_normalize(img_file_path:str, line_ratio:list=[0.2,0.2], result_map:di
     #calc_padding_set2를 통해 비율을 측정하여 입력
     
     #step_info 생성
-    step_list = [step01, step02, step03, step04, step05, step06, step07, step08, step09, step10]
+    step_list = [step01, step02, step03, step04, step05, step06, step07, step08, step09]
     step_info = {
         "name":"ip_img_normalize",
         "type":"img_preprocess_step_list",
@@ -210,13 +209,11 @@ def or_tesseract(lang:str="kor+eng",config:str="--oem 3 --psm 6",result_map:dict
     }
     return step_info
 
-
-
 def cl_general_cleansing(ocr_type:str="tesseract",result_map:dict=None) -> tuple:
     #필수 파리미터 검증(없음)
     
     #스텝 목록
-    step01 = {"name":"sanitize_text","param": {"ocr_type": ocr_type}}
+    step01 = {"name":"remove_whitespace","param": {"ocr_type": ocr_type}}
     step02 = {"name":"apply_common_dictionary","param": {"ocr_type": ocr_type}}
     step03 = {"name":"apply_block_dictionary","param": {"ocr_type": ocr_type}}
     step04 = {"name":"pattern_check","param": {"ocr_type": ocr_type}}

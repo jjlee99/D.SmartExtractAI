@@ -1,0 +1,861 @@
+{% macro content() %}
+<script>
+
+const completeId = document.getElementById("adjust_id").value;
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const zoomLabel = document.getElementById("zoomLabel");
+const btnZoomIn = document.getElementById("btnZoomIn");
+const btnZoomOut = document.getElementById("btnZoomOut");
+const btnReset = document.getElementById("btnReset");
+
+const navigation = document.querySelector('#navigation');
+const accordion = document.querySelector('#accordion');
+const btnUpdate = document.querySelector('#btnUpdate');
+const btnBack = document.querySelector('#btnBack');
+let navItemList;
+
+
+const MIN_SCALE = 0.5;          // 최소/최대 확대/축소 배율
+const MAX_SCALE = 10.0;
+const CANVAS_MARGIN = 50;        // 캔버스 여백
+const CORRECTION = 0;           // 박스 그릴 때 보정값
+const TEXT_MAX_LEN = 20;       // text의 max length 설정
+const TEXT_MAX_LEN_ROW = 2;         // textarea의 rows 설정
+
+let loadedBackgroundImage = null;   // 이미지 정보
+let bgW, bgH, bgX, bgY;         // 캔버스 내 치수
+let scale = 1;                  // 현재 확대/축소 배율
+let offsetX = 0;                // 캔버스 패닝을 위한 오프셋
+let offsetY = 0;
+let mapData = {};               // 서버에서 받아온 데이터 저장 및 수정한 데이터 저장
+let imgMap = {};
+let imageArray = [];
+let imgArrayIdx = 0;
+// 이미지 페이징
+let imgMapKey = 0;   // 현재 화면에 그려지는 이미지 idx
+
+let coordinate = {};             // 그려진 coordinate 좌표 정보
+let scaleFactor = 0;
+let borderDataList = [];         // 화면에 그려질 border 좌표 설정
+let dataByPage = {};
+
+/**
+ * =======================================
+ * <h2> 참고 </h2>
+ * 1. TODO로 표시된 부분은 실제 API 주소로 변경 필요
+ * 2. 수정 시 `mapData`에 저장된 값을 변경, 수정 시 mapData 값으로 수정 데이터 전송
+ * 3. 프로젝트 내부의 bootstrap.min.css, bootstrap.min.js, airflowDefaultTheme.f664c2f31c2dd026f579.css 사용
+ * 4. 박스 그릴 때 보정값을 임의의 상수 `CORRECTION`으로 추가 > 다른 문서 테스트 필요
+ * 5. `TEXT_MAX_LEN`, `TEXT_MAX_LEN_ROW` textarea 생성 여부를 결정하는 길이의 값, textarea rows 설정 값 > 추후 변경
+ * =======================================
+ */
+
+/**
+ * 초기화 함수
+ */
+function init() {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadData();
+        eventListeners();
+    });
+}
+
+
+/**
+ * 서버에서 데이터(이미지 URL 및 영역 정보)를 불러오는 함수
+ */
+const loadData = () => {
+    
+    if (!completeId) {
+        alert('complete_id 정보를 조회할 수 없습니다.');
+        return false;
+    }
+
+    $.ajax({
+        url: `/adjust/adjust_load/${completeId}`, // ✅ url 설정 필요
+        type: "GET",
+        success: async function(res) {
+            console.log("데이터 로드 성공", res);
+            
+            mapData = res.data;
+            imgMap = res.imgs;
+            imageArray = Object.values(imgMap);
+
+            await buildBorderDataIndex(mapData);
+
+            // 서버에서 받은 데이터로 objects 배열을 초기화하고 ID를 할당
+            await render(mapData, imgMap);
+            
+            // 이미지를 로드하고 캔버스에 그립니다.
+            loadBackground(imgMap); // ✅ previewUrl : 파일경로+파일명으로 임시 설정 -- 실서버 구현 시 확인
+        },
+        error: function(err) {
+            console.error('Fetch 에러:', err);
+        }
+    }); 
+};
+
+
+
+// --------------------------------------------------------------------------------------------------------------------
+//     date render 및 accordion 하위 dom 생성
+// --------------------------------------------------------------------------------------------------------------------
+
+
+/**
+ * 최초 실행시 pageNum을 기준으로 하는 dataByPage 생성
+ * @param data
+ * @returns dataByPage pageNum을 기준으로 하는 data 배열
+ */
+function buildBorderDataIndex(data) {
+    dataByPage = {};
+
+    let navKeys = Object.keys(data);
+    navKeys.forEach(navKey => {
+        if (!navKey) return;
+        const safeNavKey = navKey.replace(/\s+/g, '_');
+        console.log(`buildBorderDataIndex navKey 키: ${safeNavKey} =====`);
+        
+        const rowArray = mapData[navKey];
+        rowArray.forEach((rowElement, rowIdx) => {
+            if (typeof rowElement === "object") {
+                const fieldKeys = Object.keys(rowElement);
+                fieldKeys.forEach(fieldKey => {
+                    const element = rowElement[fieldKey];
+
+                    if (typeof element === 'object' && element !== null && element.page_num !== undefined) {
+                        const pageNum = element.page_num;
+                        if (!dataByPage[pageNum]) {
+                            dataByPage[pageNum] = [];
+                        }
+
+                        dataByPage[pageNum].push({
+                            navKey: safeNavKey,           // 테이블 키 
+                            rowIdx: rowIdx,             // 행 
+                            fieldKey: fieldKey,       // 필드 키 
+                            box: element.block_box,   // block_box 데이터
+                            structed_text: element.structed_text, 
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    console.log('buildBorderDataIndex end:', dataByPage);
+}
+
+/**
+ * data render
+ * @param data
+ */
+function render(data, imgMap) {
+
+    console.log('function render data:', data);
+
+    // 이미지 페이징 관련 생성
+    let imgKeys = Object.keys(imgMap);
+    let pageCnt = imgKeys.length;
+    
+    let pagination = document.querySelector('.pagination'); // ul
+    let prevBtn = document.querySelector('.prev'); // li
+
+    if (pageCnt > 1) {
+        let idx = 1;
+        let liElements = [];
+        imgKeys.forEach(key => {
+            console.log(`loadBackground imgKeys ===== 키: ${key} =====`);
+
+            let liElement = document.createElement('li');
+            liElement.classList.add('page-el-li');
+            // pageCnt 따라 반복문 처리
+            let a = document.createElement('a');
+            a.textContent = idx++;
+            a.setAttribute('data-imageIdx', key);
+            
+            liElement.appendChild(a);
+            liElements.push(liElement);
+        });
+        prevBtn.after(...liElements);
+        let pageliList = document.querySelectorAll('.page-el-li');
+        pageliList[0].classList.add('active');
+
+    } else if (pageCnt <= 1) {
+        pagination.style.display = "none";
+    }
+
+    imgArrayIdx = 1;
+    imgMapKey = 1;
+
+    updateUIForPage(imgArrayIdx);
+}
+
+
+/**
+ * 페이지 번호로 네비게이션과 콘텐츠 render
+ * @param {number} pageNum - 페이지 번호
+ */
+function updateUIForPage(pageNum) {
+    console.log(`updateUIForPage pageNum: ${pageNum} `);
+    
+    imgArrayIdx = pageNum;
+
+    const allPageLi = document.querySelectorAll('.page-el-li');
+    allPageLi.forEach(li => {
+        const a = li.querySelector('a');
+        if (a && parseInt(a.textContent, 10) === pageNum ) {
+            li.classList.add('active');
+        } else {
+            li.classList.remove('active');
+        }
+    });
+
+    navigation.innerHTML = '';
+
+    // 현재 페이지의 데이터 가져오기
+    const dataForPage = dataByPage[pageNum];
+
+    if (!dataForPage || dataForPage.length === 0) {
+        console.warn(`페이지 ${pageNum}에 데이터가 없습니다.`);
+        accordion.innerHTML = '<div class="panel panel-default"><div class="panel-body">이 페이지에는 데이터가 없습니다.</div></div>';
+        return;
+    }
+
+    // nav 생성
+    const navKeysOnPage = new Set(dataForPage.map(element => element.navKey));
+    console.log(`페이지 ${pageNum}의 nav 키:`, navKeysOnPage);
+
+    navKeysOnPage.forEach(key => {
+        if (!key) return;
+        navigation.insertAdjacentHTML('beforeend', ` <li class="nav-item" data-key=${key}><a class="nav-link" href="#">${key}</a></li>`);
+    });
+
+    navItemList = document.querySelectorAll('.nav-item');
+
+    if (navItemList.length > 0) {
+        const firstKey = navItemList[0].dataset.key;
+        renderContent(pageNum, firstKey);
+    } else {
+        accordion.innerHTML = '<div class="panel panel-default"><div class="panel-body">표시할 콘텐츠가 없습니다.</div></div>';
+    }
+}
+
+/**
+ * 선택된 navigation의 key, value render
+ * @param pageNum - 페이지 번호
+ * @param selectedKey - navigation에서 선택된 key값
+ */
+function renderContent(pageNum, selectedKey) {
+    accordion.innerHTML = '';
+
+    const dataForPage = dataByPage[pageNum];
+
+    if (!dataForPage) {
+        console.warn(`renderContent: 페이지 ${pageNum} 데이터 없음`);
+        return;
+    }
+
+    const pageInfo = dataByPage[imgArrayIdx];
+    const rowsGrouped = {}; 
+    
+    pageInfo.forEach(element => {
+        if (element.navKey !== selectedKey) {
+            return;
+        }
+
+        const rowIdx = element.rowIdx;
+        if (!rowsGrouped[rowIdx]) {
+            rowsGrouped[rowIdx] = {};
+        }
+
+        rowsGrouped[rowIdx][element.fieldKey] = {
+            block_box: element.box,
+            structed_text: element.structed_text,
+        };
+    });
+    
+    const sortedRowIndices = Object.keys(rowsGrouped).sort((a, b) => a - b);
+    sortedRowIndices.forEach(rowIdx => {
+        const rowObject = rowsGrouped[rowIdx];
+        const numericRowIdx = parseInt(rowIdx, 10);
+
+        const htmlDivElement = createAccordionItemElement(numericRowIdx, rowObject);
+        accordion.appendChild(htmlDivElement);
+    });
+
+    // key값 active 설정
+    if (navItemList && navItemList.length > 0) {
+        navItemList.forEach(element => {
+            element.classList.toggle('active', element.dataset.key === selectedKey);
+        });
+    }
+}
+
+/**
+ * 하나의 아코디언 아이템 전체 DOM 요소를 생성하는 메인 함수
+ * @param {string} index - 아코디언 아이템의 인덱스 (0부터 시작)
+ * @param {object} dataObject - 테이블 행들을 만들 데이터 객체
+ * @returns {HTMLDivElement} - 생성된 최상위 div 요소
+ */
+function createAccordionItemElement(index, dataObject) {
+	const panelDefault = document.createElement('div');
+	panelDefault.classList.add('panel', 'panel-default');
+
+	// panel-heading 영역 생성
+	const panelHeader = document.createElement('div');
+	panelHeader.classList.add('panel-heading');
+	panelHeader.id = `heading${index}`;
+	panelHeader.role = 'tab';
+
+	const panelTitle = document.createElement('h4');
+	panelTitle.classList.add('panel-title');
+
+	const panelButton = document.createElement('a');
+	panelButton.setAttribute('data-toggle', 'collapse');
+	panelButton.setAttribute('data-parent', `#accordion`);
+	panelButton.setAttribute('aria-expanded', "false"); // 기본 닫기 설정
+	panelButton.setAttribute('aria-controls', `collapse${index}`);
+	panelButton.href = `#collapse${index}`;
+	panelButton.textContent=`row${index+1}`;
+
+	// div body 생성
+	const collapse = document.createElement('div');
+	collapse.classList.add('panel-collapse', 'collapse');
+	collapse.role = 'tabpanel';
+	collapse.id = `collapse${index}`;
+	collapse.setAttribute('row-idx', index);
+	collapse.setAttribute('aria-labelledby', panelHeader.id);
+	
+	const panelBody = document.createElement('div');
+	panelBody.classList.add('panel-body');
+
+
+	// 테이블 생성
+	const table = document.createElement('table');
+    table.classList.add('table', 'mb-0');
+    
+    // colgroup 생성
+    const colgroup = document.createElement("colgroup");
+    const col1 = document.createElement("col");
+    col1.style.width = "30%";
+    const col2 = document.createElement("col");
+    col2.style.width = "70%";
+
+	const thead = document.createElement('thead');
+	thead.innerHTML = `<tr><td>키</td><td>값</td></tr>`;
+	const tbody = document.createElement('tbody');
+
+	// dataObject의 각 키-값 쌍에 대해 테이블 행 생성
+	Object.keys(dataObject).forEach((key) => {
+		if (typeof dataObject[key] === "object") {
+			console.log('createAccordionItemElement > key:', key, 'value:', dataObject[key]);
+			
+            const tableRow = createTableRowElement(key, dataObject[key]);            
+            if (tableRow != ``) {
+                tbody.appendChild(tableRow);
+            }
+		}
+	});
+
+    colgroup.appendChild(col1);
+    colgroup.appendChild(col2);
+    table.appendChild(colgroup);
+	table.appendChild(thead);
+	table.appendChild(tbody);
+	panelBody.appendChild(table);
+	collapse.appendChild(panelBody);
+
+	panelTitle.appendChild(panelButton);
+	panelHeader.appendChild(panelTitle);
+
+	panelDefault.appendChild(panelHeader);
+	panelDefault.appendChild(collapse);
+
+	return panelDefault;
+}
+
+/**
+ * 테이블 행(tr) DOM 요소를 생성하는 헬퍼 함수
+ * @param {string} key - 데이터의 키
+ * @param {object} valueObject - 데이터의 값 객체 (예: { block_box: [...], structed_text: "..." })
+ * @returns {HTMLTableRowElement} - 생성된 tr 요소
+ */
+function createTableRowElement(key, valueObject) {
+    const tr = document.createElement('tr');
+    tr.classList.add('detail-row');
+
+    // block_box 좌표가 있다면 data-* 속성으로 추가
+    if (valueObject.block_box && valueObject.block_box.length === 4) {
+        borderDataList.push(valueObject.block_box);
+
+        tr.setAttribute('data-coordinate-x', valueObject.block_box[0]);
+        tr.setAttribute('data-coordinate-y', valueObject.block_box[1]);
+        tr.setAttribute('data-coordinate-w', valueObject.block_box[2]);
+        tr.setAttribute('data-coordinate-h', valueObject.block_box[3]);
+    }
+
+    // 첫 번째 셀 (키)
+    const tdKey = document.createElement('td');
+    tdKey.textContent = `${key}`;
+
+    // 두 번째 셀 (값)
+    const tdValue = document.createElement('td');
+    
+    // length에 따라 textarea or input 생성
+    let inputElement
+    if (valueObject.structed_text.length > TEXT_MAX_LEN) {
+        inputElement = document.createElement('textarea');
+        inputElement.rows = TEXT_MAX_LEN_ROW;
+    } else {
+        inputElement = document.createElement('input');
+        inputElement.type = 'text';
+    }
+    inputElement.name = key;
+    inputElement.value = valueObject.structed_text || '';
+    inputElement.classList.add('form-control');
+
+    tdValue.appendChild(inputElement);
+    tr.appendChild(tdKey);
+    tr.appendChild(tdValue);
+
+    return tr;
+}
+
+
+
+/**
+ * ========================================================================================================================
+ *     테이블 관련 함수
+ * ======================================================================================================================
+ */
+
+/**
+ * 좌표값/배경이미지 초기화 함수
+ */
+function resetCoordinate() {
+    coordinate = {};
+    drawBackgroundImg();
+}
+
+/**
+ * 아코디언 row click 이벤트
+ * @param e
+ */
+function rowClickEvent(e) {
+    const clickRow = e.target.closest('.detail-row');
+    if (!clickRow) return;
+
+    // 배경색 처리
+    const clickedRowElement = document.querySelector('.detail-row.bg-color-ddd');
+    if (clickedRowElement) {
+        clickedRowElement.classList.remove('bg-color-ddd');
+    }
+    clickRow.classList.add('bg-color-ddd');
+
+    const { coordinateX, coordinateY, coordinateW, coordinateH } = clickRow.dataset;
+    if (coordinate != {} 
+            && (coordinate.x === coordinateX && coordinateY === coordinate.y && coordinate.w === coordinateW && coordinate.h === coordinateH)) {
+        return;
+    }
+
+    resetCoordinate();
+
+    if (coordinateX && coordinateY && coordinateW && coordinateH) {
+        coordinate = { x : coordinateX, y:coordinateY, w:coordinateW, h:coordinateH};
+        console.log(`rowClickEvent coordinate : x=${coordinate.x}, y=${coordinate.y}, w=${coordinate.w}, h=${coordinate.h}`);
+
+        drawBox(coordinate);
+    }
+}
+
+/**
+ * input 값 변경 이벤트
+ * @param e
+ */ 
+function inputChangeEvent(e) {
+    if (!e.target.classList.contains('form-control')) return false;
+
+    const name = e.target.name;
+    const value = e.target.value;
+    
+    const activeNav = document.querySelector('.nav-item.active');
+    const openAccordion = document.querySelector('.panel-collapse.collapse.in');
+
+    if (!activeNav && !openAccordion) return false;
+
+    const tableId = activeNav.dataset.key;
+    const rowId = openAccordion.getAttribute('row-idx');
+    
+    if (mapData[tableId] && mapData[tableId][rowId] && mapData[tableId][rowId][name]) {
+        const changeKey = mapData[tableId][rowId][name];
+        changeKey.structed_text = value;
+    } else {
+        alert('수정할 데이터를 찾을 수 없습니다. 다시 시도해주세요.');
+        console.error('!changeKey tableId:', tableId, ' rowId:', rowId, ' name:', name);
+    }
+}
+
+
+/**
+ * navigation 변경 이벤트
+ * @param e
+ */ 
+function navigationActiveChangeEvent(e) {
+    e.preventDefault();
+    
+    const clickLink = e.target.closest('.nav-item');
+    if (!clickLink) return;
+
+    // 현재 active key와 click된 key 값이 동일한지 확인
+    const selectKey = clickLink.dataset.key;
+    const activeKey = document.querySelector('.nav-item.active')?.dataset.key;
+    if (activeKey === selectKey) return;
+    
+    // 그려진 box 좌표, 영역좌표 초기화
+    resetCoordinate();
+
+    // border 영역 초기화
+    borderDataList = [];
+
+    // mapData의 key 값으로 상세 데이터 조회
+    if (mapData && mapData[selectKey]) { 
+        renderContent(imgArrayIdx, selectKey);
+    }
+
+    drawBackgroundImg();
+}
+
+/**
+ * 데이터 수정 이벤트 처리
+ * @param e
+ */
+function handleDataUpdate(e) {
+    e.preventDefault();
+
+    if (!confirm('전체 데이터를 교정사전에 저장하시겠습니까?')) return;
+
+    // 💡 백엔드 요구 사항(message: "'data' field missing...")에 맞춰 mapData를 'data' 필드 안에 래핑합니다.
+    const requestPayload = {
+        data: mapData
+    };
+
+    console.log('update data :', mapData);
+    console.log('request payload:', requestPayload)
+
+    // fetch 대신 $.ajax를 사용하여 loadData와 일관성을 유지하며 데이터 업데이트
+    $.ajax({
+        url: `/adjust/edit/${completeId}`,
+        type: "POST", // 데이터 수정이므로 POST
+        contentType: 'application/json', // 서버로 보내는 데이터 형식 지정
+        // CSRF 토큰 헤더가 제거되었습니다.
+        
+        data: JSON.stringify(requestPayload), // JavaScript 객체를 JSON 문자열로 변환하여 전송
+        
+        // loadData의 success와 동일한 구조
+        success: function(data) {
+            console.log('서버 응답:', data);
+
+            if (data.status === 'redirect' && data.url) {
+                // 클라이언트에서 페이지 변경을 실행 (이때 flash 메시지가 표시됨)
+                window.location.href = data.url; 
+            } else {
+                console.log('데이터가 성공적으로 업데이트되었으나 리디렉션이 필요하지 않습니다.');
+            }
+            
+            // alert('데이터가 성공적으로 업데이트되었습니다.'); // custom UI 필요
+            console.log('데이터가 성공적으로 업데이트되었습니다.');
+        },
+        
+        // loadData의 error와 동일한 구조
+        error: function(err) {
+            console.error('Ajax 에러:', err);
+            // alert('데이터 업데이트 중 오류가 발생했습니다.'); // custom UI 필요
+            console.error('데이터 업데이트 중 오류가 발생했습니다.');
+        }
+    });
+}
+
+/**
+ * 이미지 페이징관련 이벤트 함수
+ * @param e
+ */
+async function changeImageIdxEvent(e) {
+    e.preventDefault();
+    console.log(`changeImageIdxEvent imgArrayIdx ${imgArrayIdx}`);
+
+    const clickedLi = event.target.closest('li');
+    if (clickedLi.classList.contains('prev')) {
+        console.log('이전 버튼 클릭');
+        if (imgArrayIdx > 1) {
+            await changePageElAcvive(Number(imgArrayIdx-1));
+        }
+
+    } else if (clickedLi.classList.contains('next')) {
+        const imgMapLen = Object.keys(imgMap).length;
+        if (imgArrayIdx < imgMapLen) {
+            await changePageElAcvive(Number(imgArrayIdx+1));
+        }
+
+    } else if (clickedLi.classList.contains('page-el-li')) {
+        const clickedaTag = clickedLi.querySelector('a');
+        if (clickedaTag && clickedaTag.dataset.imageidx) {
+            const pageIndex = Number(clickedaTag.textContent);
+
+            // if(imgMapKey === pageIndex ) return;
+            if(imgArrayIdx === pageIndex ) return;
+
+            await changePageElAcvive(pageIndex);
+        }
+
+    }
+}
+
+/**
+    페이지 변경 관련 수정
+*/
+function changePageElAcvive(pageIndex) {
+    const pageliList = document.querySelectorAll('.page-el-li');
+    pageliList.forEach(liElement => {
+        const findaTag = liElement.querySelector('a');
+        let flag = Number(findaTag.textContent) === pageIndex;
+        if (flag) imgMapKey = findaTag.dataset.imageidx;
+        liElement.classList.toggle('active', flag);
+    });
+    imgArrayIdx = Number(pageIndex);
+    
+    console.log(`페이지 변경 = 현재 imgArrayIdx: ${imgArrayIdx}, imgMapKey: ${imgMapKey}`);
+
+    resetCoordinate();
+    // border 영역 초기화
+    borderDataList = [];
+    
+    loadBackground(imgMap);
+
+    updateUIForPage(imgArrayIdx);
+}
+
+
+/**
+ * ========================================================================================================================
+ *     캔버스 드래그 관련 함수
+ * ======================================================================================================================
+ */
+
+/**
+ * 마우스 좌표를 화면 공간에서 캔버스 공간으로 변환합니다.
+ * 확대/축소 및 패닝을 고려합니다.
+ * @param {MouseEvent} e 마우스 이벤트 객체.
+ * @returns {Array<number>} 캔버스 공간의 [x, y] 좌표.
+ */
+function toCanvasCoord(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    return [(x - offsetX) / scale, (y - offsetY) / scale];
+}
+
+/**
+ * 특정 지점을 중심으로 캔버스를 확대 또는 축소합니다.
+ * @param {number} factor 확대/축소 배율 (예: 1.2는 확대).
+ * @param {number} cx 확대/축소 중심점의 X 좌표 (캔버스 공간).
+ * @param {number} cy 확대/축소 중심점의 Y 좌표 (캔버스 공간).
+ */
+function zoomAt(factor, cx, cy) {
+    const prevScale = scale;
+    let newScale = scale * factor;
+
+    // 새 배율을 최소/최대 한계값으로 제한
+    if (newScale < MIN_SCALE) newScale = MIN_SCALE;
+    if (newScale > MAX_SCALE) newScale = MAX_SCALE;
+
+    // 확대/축소 지점을 중앙에 유지하기 위해 오프셋 조정
+    offsetX = cx - (cx - offsetX) * (newScale / prevScale);
+    offsetY = cy - (cy - offsetY) * (newScale / prevScale);
+
+    scale = newScale;
+    drawBackgroundImg();
+}
+
+/**
+ * 마우스 휠 이벤트: 확대/축소
+ * @param e
+ */
+function handleWheel(e) {
+    e.preventDefault();
+    let factor = e.deltaY < 0 ? 1.1 : 0.9;
+    const [cx, cy] = toCanvasCoord(e);
+    zoomAt(factor, cx, cy);
+};
+
+
+
+
+
+
+
+/**
+ * ========================================================================================================================
+ *      이미지 관련 함수
+ * ========================================================================================================================
+ */
+
+
+/**
+ * 배경 이미지의 크기와 위치를 계산합니다.
+ * @param {HTMLImageElement} img - 배경 이미지 객체
+ */
+function calculateBackgroundDimensions(img) {
+    const parent = canvas.parentElement;
+    canvas.width = parent.clientWidth;
+    canvas.height = parent.clientHeight;
+
+    // 종횡비를 유지하며 캔버스에 맞게 이미지 크기 계산
+    const imgAspect = img.width / img.height;
+    const canvasAspect = canvas.width / canvas.height;
+
+    // 캔버스 여백
+    const innerWidth = canvas.width - CANVAS_MARGIN * 2;
+    const innerHeight = canvas.height - CANVAS_MARGIN * 2;
+
+    // 가로/세로 더 긴 곳에 맞추고 여백 고려
+    scaleFactor = imgAspect > canvasAspect
+        ? innerWidth / img.width : innerHeight / img.height;
+
+    bgW = img.width * scaleFactor;
+    bgH = img.height * scaleFactor;
+    bgX = (canvas.width - bgW) / 2;
+    bgY = (canvas.height - bgH) / 2;
+}
+
+/**
+ * 배경 이미지 그리기
+ */
+function drawBackgroundImg() {
+    if (!loadedBackgroundImage) {
+        console.error('이미지가 아직 로드되지 않았습니다.');
+        return;
+    }
+
+    calculateBackgroundDimensions(loadedBackgroundImage);
+
+    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+    // 캔버스 초기화
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 배경 이미지 그리기
+    ctx.drawImage(loadedBackgroundImage, bgX, bgY, bgW, bgH);
+
+    // 외곽선 그리기
+    if (borderDataList !== []) {
+        borderDataList.forEach(element => {
+            let x = element[0], y = element[1], w = element[2], h = element[3];
+
+            const cal_br_x = (parseFloat(x) * scaleFactor) + bgX + CORRECTION;
+            const cal_br_y = (parseFloat(y) * scaleFactor) + bgY + CORRECTION;
+            const cal_br_w = parseFloat(w) * scaleFactor;
+            const cal_br_h = parseFloat(h) * scaleFactor;
+            
+            // 테두리 두께 설정
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'red';       
+            ctx.strokeRect(cal_br_x, cal_br_y, cal_br_w, cal_br_h); 
+        });
+    }
+
+    // 줌 배율 업데이트
+    zoomLabel.textContent = "Zoom level: " + scale.toFixed(4);
+
+    if (coordinate) {
+        drawBox(coordinate);
+    }
+}
+
+/**
+ * 배경 이미지 여백과 크기조절을 위해 세팅하는 함수
+ */
+function loadBackground(imgMap) {
+    // 현재 이미지 주소 불러오기
+    image = imageArray[imgArrayIdx-1];
+
+    const backgroundImage = new Image();
+    backgroundImage.src = image;
+
+    backgroundImage.onload = function() {
+        loadedBackgroundImage = backgroundImage;
+        drawBackgroundImg();
+    };
+
+    backgroundImage.onerror = function() {
+        console.error('이미지를 로드할 수 없습니다:', image);
+    }
+}
+
+     
+
+/**
+ * 좌표 값으로 캔버스에 박스 그리기
+ * @param coordinate
+ */
+const drawBox = (coordinate) => {
+    // 원본 이미지와 캔버스 비율에 맞춰서 좌표값 조정
+    let x_scaled = parseFloat(coordinate.x) * scaleFactor;
+    let y_scaled = parseFloat(coordinate.y) * scaleFactor;
+    let w_scaled = parseFloat(coordinate.w) * scaleFactor;
+    let h_scaled = parseFloat(coordinate.h) * scaleFactor;
+
+    // 2. 최종 좌표 계산: 캔버스 컨텍스트의 현재 변환 상태(scale, offsetX, offsetY)에 맞춰
+    //    fillRect는 캔버스 공간 내의 (bgX, bgY) 지점에서부터 그리기 시작해야 함.
+    let finalX = x_scaled + bgX - CORRECTION;
+    let finalY = y_scaled + bgY - CORRECTION;
+
+    // 3. CORRECTION은 보통 캔버스 선 굵기/선명도 보정용이므로 너비/높이에는 제외하거나,
+    //    박스를 얇게 그리려면 너비/높이에 2*CORRECTION을 빼주는 것을 고려해야 함
+    let finalW = w_scaled + (2 * CORRECTION); // 선택 사항: 보정값을 너비/높이에 포함하여 영역을 넓힐 수 있음
+    let finalH = h_scaled + (2 * CORRECTION); // 선택 사항: 보정값을 너비/높이에 포함하여 영역을 넓힐 수 있음
+
+    ctx.fillStyle = "rgba(220, 53, 53, 0.4)";
+    ctx.fillRect(finalX, finalY, finalW, finalH);
+}
+
+
+/**
+ * ========================================================================================================================
+ *     이벤트 리스너
+ * =======================================================================================================================
+ */
+function eventListeners() {
+    accordion.addEventListener('click', rowClickEvent);
+
+    accordion.addEventListener('change', inputChangeEvent);
+
+    navigation.addEventListener('click', navigationActiveChangeEvent);
+
+    btnUpdate.addEventListener('click', handleDataUpdate);
+
+    btnBack.addEventListener('click', () => {
+        location.href="/back"
+    });
+
+    document.querySelector('.pagination').addEventListener('click', changeImageIdxEvent);   
+
+    btnReset.onclick = () => {  // 초기화 클릭 시
+        scale = 1;
+        offsetX = 0;
+        offsetY = 0;
+        resetCoordinate();
+    }
+
+    btnZoomIn.onclick = () => zoomAt(1.2, canvas.width / 2, canvas.height / 2); // 확대 클릭 시
+
+    btnZoomOut.onclick = () => zoomAt(0.8, canvas.width / 2, canvas.height / 2);// 축소 클릭 시
+
+    canvas.addEventListener("wheel", handleWheel, {
+        passive: false
+    });
+}
+
+init();
+
+</script>
+{% endmacro %}

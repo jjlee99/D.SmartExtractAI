@@ -24,7 +24,7 @@ from airflow.decorators import task, task_group # Airflow 데코레이터 임포
 # (task_definitions.py에서 get_task_definition 함수를 정의했다고 가정합니다.)
 # from .task_definitions import get_task_definitions 
 
-def create_dag(dag_id, schedule, default_args, task_definition_func, doc_class_id, doc_info_records=None):
+def create_dag(dag_id, description, schedule, default_args, tags, task_definition_func, doc_class_id):
     """
     동적 TaskFlow API 태스크 정의를 기반으로 DAG를 생성합니다.
     
@@ -34,11 +34,12 @@ def create_dag(dag_id, schedule, default_args, task_definition_func, doc_class_i
     """
     
     with DAG(
-        dag_id=dag_id, 
+        dag_id=dag_id,
+        description=description,
         schedule=schedule, 
         default_args=default_args, 
         catchup=False,
-        tags=['dynamic', 'image_processing', f'doc_class_{doc_class_id}']
+        tags=['dynamic', dag_id,]+tags,
     ) as dag:
         
         # task_definition_func을 호출하여 TaskFlow API 기반의 태스크 인스턴스와
@@ -46,8 +47,7 @@ def create_dag(dag_id, schedule, default_args, task_definition_func, doc_class_i
         # task_definition_func은 이 호출을 통해 모든 PythonOperator 인스턴스(데코레이터 태스크)를 생성하고 
         # 의존성을 설정하는 역할을 수행합니다.
         task_definition_func(
-            doc_class_id=doc_class_id,
-            doc_info_records=doc_info_records)
+            doc_class_id=doc_class_id)
         
     return dag
 

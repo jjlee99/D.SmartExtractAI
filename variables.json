@@ -1,4 +1,5 @@
 {
+    "DAGS_FOLDER": "/opt/airflow/dags",
     "DATA_FOLDER": "/opt/airflow/data",
     "RESULT_FOLDER": "/opt/airflow/data/result",
     "TEMP_FOLDER": "/opt/airflow/data/temp",
@@ -10,7 +11,9 @@
     "TEMPLATE_FOLDER": "/opt/airflow/data/template",
     "MASK_FOLDER": "/opt/airflow/data/mask",
     "BASE_URL": "http://192.168.10.18:9191",
-    "DATASET_SIZE": "200"
+    "CREATE_DATASET_SIZE": "200",
+    "CREATE_AUGMENT_POLICY": "default",
+    "CREATE_NORMALIZE_POLICY": "default"
 }
 
 

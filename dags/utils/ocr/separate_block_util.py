@@ -171,6 +171,11 @@ def separate_block_by_line(
                                                                 line_ratio=horizontal_line_ratio,
                                                                 min_gap=horizontal_min_gap,
                                                                 rotation=False, iter_save=iter_save)
+            if num==1 and len(result_list)==0:
+                print("첫 수평 분할에서 유효한 분할선을 찾지 못했습니다. 수직 우선 분할로 전환합니다.")
+                is_horizontal_turn = False
+                vertical_queue.append(pop_data)
+                continue
             # 수평 자르기 결과를 수직 큐에 추가
             for item in result_list:
                 vertical_queue.append(item)
@@ -186,6 +191,11 @@ def separate_block_by_line(
                                                                 line_ratio=vertical_line_ratio,
                                                                 min_gap=vertical_min_gap,
                                                                 rotation=True, iter_save=iter_save)
+            if num==1 and len(result_list)==0:
+                print("첫 수직 분할에서 유효한 분할선을 찾지 못했습니다. 수평 우선 분할로 전환합니다.")
+                is_horizontal_turn = True
+                horizontal_queue.append(pop_data)
+                continue
             # 수직 자르기 결과를 수평 큐에 추가
             for item in result_list:  
                 horizontal_queue.append(item)
@@ -403,7 +413,7 @@ def split_image_by_vertical_gaps(
     
     return complete_block_list
 
-def split_image_by_ratio(
+def split_image_by_left_ratio(
     block_data: tuple[Any, dict], 
     split_ratio:float=None, 
     angle:int=0, 
@@ -566,10 +576,20 @@ def _separate_areas_by_lines_with_rotation(
     
     gray = cv2.cvtColor(img_np_bgr, cv2.COLOR_BGR2GRAY)
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    black_pixel_count = cv2.countNonZero(binary)
+    total_pixel_count = binary.shape[0] * binary.shape[1]
+    black_ratio = black_pixel_count / total_pixel_count
+
+    # 검정색이 60% 이상이면 라인을 추출할 의미가 없다고 판단하여 빈 리스트 반환
+    if black_ratio > 0.6:
+        print("Too many black pixels, skipping line detection")
+        return []
+
     closing_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1))  # 수평선
     closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, closing_kernel, iterations=1) # 반전 시 끊김 연결
     dilated_binary = cv2.dilate(closing, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)), iterations=1)
-    h, w = dilated_binary.shape
+    img_h, img_w = dilated_binary.shape
 
     if iter_save:
         # 라인 디텍트
@@ -578,7 +598,7 @@ def _separate_areas_by_lines_with_rotation(
         meta_path = Path(TEMP_FOLDER) / result_map["folder_path"] / f"{block_id}.json"
         json_util.save(str(meta_path), block_map)
 
-    horizontal_kernel_size = int(w * line_ratio)
+    horizontal_kernel_size = int(img_w * line_ratio)
     #너무 작은 커널 사이즈는 의미가 없으므로 빈 리스트 반환
     if horizontal_kernel_size < 5:
         return []
@@ -598,7 +618,11 @@ def _separate_areas_by_lines_with_rotation(
         json_util.save(str(meta_path), block_map)
 
     contours, _ = cv2.findContours(detected_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    y_coords = [cv2.boundingRect(c)[1] + cv2.boundingRect(c)[3] // 2 for c in contours]
+    y_coords = []
+    for c in contours:
+        x, y, w, h = cv2.boundingRect(c)
+        y_coords.append(y)       # 상단
+        y_coords.append(y + h)   # 하단
     if not y_coords:
         # 유효한 분할선이 발견되지 않았을 경우 빈 리스트 반환
         return []
@@ -613,7 +637,7 @@ def _separate_areas_by_lines_with_rotation(
     
     results = []
     split_num = 1
-    split_points = sorted(set([0] + y_coords + [h]))
+    split_points = sorted(set([0] + y_coords + [img_h]))
     for i in range(len(split_points) - 1):
         print(f"Processing split {i+1}/{len(split_points)-1} for {block_id} in {direction} direction")
         y1, y2 = split_points[i], split_points[i + 1]
@@ -626,7 +650,7 @@ def _separate_areas_by_lines_with_rotation(
         
         sub_block_map = {
             "block_id": sub_block_id,
-            "block_box": [0, y1, w, y2 - y1],
+            "block_box": [0, y1, img_w, y2 - y1],
             "section_class_id":section_class_id,
             "section_name": section_name,
             "page_num":page_num
@@ -685,7 +709,7 @@ function_map = {
     "one_block": {"function": one_block, "input_type": "np_bgr", "output_type": "np_bgr", "param": "step_info,result_map"}, #gbn=
     "separate_block_by_line": {"function": separate_block_by_line, "input_type": "np_bgr", "output_type": "np_bgr", "param": "horizontal_first,horizontal_line_ratio,horizontal_min_gap,vertical_line_ratio,vertical_min_gap,iter_save"}, #gbn=v/h
     "split_image_by_vertical_gaps": {"function": split_image_by_vertical_gaps, "input_type": "np_bgr", "output_type": "np_bgr", "param": "min_start_point,min_gap_width,min_start_ratio,min_gap_ratio,angle,iter_save"}, #gbn=g
-    "split_image_by_ratio": {"function": split_image_by_ratio, "input_type": "np_bgr", "output_type": "np_bgr", "param": "split_ratio,angle,iter_save"}, #gbn=r
+    "split_image_by_left_ratio": {"function": split_image_by_left_ratio, "input_type": "np_bgr", "output_type": "np_bgr", "param": "split_ratio,angle,iter_save"}, #gbn=r
 }
 
 

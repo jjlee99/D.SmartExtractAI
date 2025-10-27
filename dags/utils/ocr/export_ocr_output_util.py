@@ -113,6 +113,51 @@ def db_to_excel(
     return doc_info
 
 
+def export_to_excel(
+    doc_info: dict,
+    result_map: dict = None,
+    **kwargs
+) -> dict:
+    structed_doc = doc_info.get("structed_doc", {})
+    
+    origin_file_path = doc_info["doc_path"]["_originfile"]
+    output_path = Path(origin_file_path).with_suffix(".xlsx")
+    
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for table_name, rows in structed_doc.items():
+            if not rows:
+                print(f"[INFO] {table_name} 데이터 없음 → 스킵")
+                continue
+            # 컬럼명 추출
+            col_keys = []
+            for row in rows:
+                col_keys.extend(list(row.keys()))
+            col_keys = sorted(list(set(col_keys)))
+
+            # structed_text 값 추출
+            excel_rows = []
+            for row in rows:
+                excel_row = []
+                for k in col_keys:
+                    val = row.get(k)
+                    if val is not None:
+                        val = val.get("structed_text", "")
+                    else:
+                        val = ""
+                    excel_row.append(val)
+                excel_rows.append(excel_row)
+            # 데이터프레임 생성
+            df = pd.DataFrame(excel_rows, columns=col_keys)
+
+            # 시트명은 31자 이하여야 함
+            sheet_name = table_name[:31]
+            # 엑셀 시트로 저장
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            print(f"[OK] 시트 생성: {sheet_name} ({len(df)} 건)")
+    print(f"[DONE] Excel 저장 완료: {output_path}")
+    return doc_info
+
+
 
 def _save(file_path:str,save_key:str="tmp",result_map:dict=None):
     if not result_map:
@@ -123,4 +168,5 @@ def _save(file_path:str,save_key:str="tmp",result_map:dict=None):
 function_map = {
     "insert_ocr_result": {"function": insert_ocr_result, "param": "ocr_type,keep_chars"},
     "db_to_excel": {"function": db_to_excel, "param": ""},
+    "export_to_excel": {"function": export_to_excel, "param": ""},
 }

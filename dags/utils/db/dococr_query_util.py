@@ -5,18 +5,19 @@ from utils.db.maria_util import execute, execute_many
 #insert만 벌크 실행 가능
 def insert_map(key, params:Union[list,tuple]=None, fetch:bool=False, return_id:bool=False):
     map = {
-        "insertRun":"INSERT INTO TB_AF_RUN(dag_id, run_id, start_date, status) VALUES (%s, %s, current_timestamp(), 'P')", # W 대기, P 진행중
-        "insertTargetFile":"INSERT INTO TB_AF_TARGET(run_id, target_id, content) VALUES (%s, %s, %s)",
-        "insertClassifyResult":"INSERT INTO TB_AF_TARGET(run_id, target_id, content) VALUES (%s, %s, %s)",
+        "insertRun":"INSERT INTO TB_AF_RUN(DAG_ID, RUN_ID, START_DATE, STATUS) VALUES (%s, %s, current_timestamp(), 'P')", # P(진행중)
+        "insertTargetFile":"INSERT INTO TB_AF_TARGET(RUN_ID, TARGET_ID, CONTENT) VALUES (%s, %s, %s)",
+        "insertClassifyResult":"INSERT INTO TB_AF_TARGET(RUN_ID, TARGET_ID, CONTENT) VALUES (%s, %s, %s)",
         "insertTranslateLog":"INSERT INTO TB_OCR_TRN_LOG (TRN_TABLE_NM, TRN_TABLE_PK, TRN_COL_ID, ORI_TEXT, TRN_TEXT) VALUES (%s, %s, %s, %s, %s)",
         "insertComplete":"INSERT INTO TB_AF_COMPLETE (RUN_ID,CONTENT,USE_YN) VALUES (%s,%s,'Y')",
-        "insertCompleteMap":"INSERT INTO TB_AF_COMPLETE_MAP (COMPLETE_ID, TABLE_ID, PK_VALUE) VALUES (%s, %s, %s)"
+        "insertCompleteMap":"INSERT INTO TB_AF_COMPLETE_MAP (COMPLETE_ID, TABLE_ID, PK_VALUE) VALUES (%s, %s, %s)",
+        "insertCreateUnready":"INSERT INTO TB_AI_CREATE (DOC_CLASS_ID,LAYOUT_CLASS_ID,STATUS) VALUES (%s,%s,'U')", # U(미준비)
     }
     if isinstance(params, list):  # 벌크 삽입(벌크 입력은 return_id 지원 안함)
-        print("bulk insert execute",params)
+        print("bulk insert query : ",map[key],params)
         return execute_many(map[key], params_list=params) 
     elif isinstance(params, tuple):  # 단일 삽입
-        print("insert execute",params)
+        print("insert query : ",map[key],params)
         return execute(map[key], params=params, fetch=fetch, return_id=return_id)
     else :
         print("error", "파라미터가 list나 tuple이 아닙니다.")
@@ -25,12 +26,18 @@ def insert_map(key, params:Union[list,tuple]=None, fetch:bool=False, return_id:b
 
 def update_map(key, params:tuple=None):
     map = {
-        "updateRunEnd":"UPDATE TB_AF_RUN SET end_date = current_timestamp(), status = %s WHERE dag_id = %s and run_id = %s ",
-        "updateTargetContent":"UPDATE TB_AF_TARGET SET content = %s WHERE run_id = %s and target_id = %s ",
-        "updateTargetContentDetail":"UPDATE TB_AF_TARGET SET content = JSON_SET(content, %s, %s) WHERE run_id = %s and target_id = %s ",
-        "updateClassifyAiInfo":"UPDATE TB_DI_LAYOUT_CLASS SET classify_ai_info = %s WHERE LAYOUT_CLASS_ID = %s ",
+        "updateRunEnd":"UPDATE TB_AF_RUN SET END_DATE = CURRENT_TIMESTAMP(), STATUS = %s WHERE DAG_ID = %s AND RUN_ID = %s ", # SATATUS : U(미준비),H(높은우선순위),W(대기),P(진행중),C(완료),E(오류),D(비활성화)
+        "updateTargetContent":"UPDATE TB_AF_TARGET SET CONTENT = %s WHERE RUN_ID = %s AND TARGET_ID = %s ",
+        "updateTargetContentDetail":"UPDATE TB_AF_TARGET SET CONTENT = JSON_SET(CONTENT, %s, %s) WHERE RUN_ID = %s AND TARGET_ID = %s ",
+        "updateClassifyAiInfo":"UPDATE TB_DI_LAYOUT_CLASS SET CLASSIFY_AI_INFO = %s WHERE LAYOUT_CLASS_ID = %s ",
+        "updateCreateReady":"UPDATE TB_AI_CREATE SET STATUS = 'W' WHERE STATUS = 'U' ", # U(비활성화),W(대기)
+        "updateCreateStart":"UPDATE TB_AI_CREATE SET START_DATE = CURRENT_TIMESTAMP(), STATUS = 'P' WHERE CREATE_ID = %s ", # P(진행중)
+        "updateCreateStatus":"UPDATE TB_AI_CREATE SET STATUS = %s WHERE CREATE_ID = %s ", # SATATUS : U(미준비),H(높은우선순위),W(대기),P(진행중),C(완료),E(오류),D(비활성화)
+        "updateCreateEnd":"UPDATE TB_AI_CREATE SET END_DATE = CURRENT_TIMESTAMP(), STATUS = %s WHERE CREATE_ID = %s ", # E(오류),C(완료)
+        
         "updateCompleteContent":"UPDATE TB_AF_COMPLETE SET content = JSON_SET(content, %s, %s), updt = current_timestamp() WHERE complete_id = %s ",
     }
+
     print(" query : ",map[key],params)
     execute(map[key], params=params, fetch=False)
     
@@ -70,15 +77,26 @@ def select_list_map(key, params:tuple=None, dictionary:bool=False):
                 "WHERE A.LAYOUT_CLASS_ID = %s "
                 ,['section_class_id','section_type']
         ),
-        "selectTableList": ("SELECT DISTINCT A.TABLE_ID, A.TABLE_NM, A.PARENT_TABLE_ID, B.TABLE_NM AS PARENT_TABLE_NM "
-                "FROM TB_DS_TABLE A LEFT JOIN TB_DS_TABLE B ON A.PARENT_TABLE_ID=B.TABLE_ID "
-                "INNER JOIN TB_DS_COLUMN C ON A.TABLE_ID=C.TABLE_ID "
-                "INNER JOIN TB_DI_BLOCK_CLASS D ON C.COLUMN_ID=D.COLUMN_ID "
-                "INNER JOIN VW_DI_DOC_LAYOUT_SECTION E ON D.SECTION_CLASS_ID=E.SECTION_CLASS_ID "
+        "selectRelatedTableList": ("SELECT A.TABLE_ID, A.TABLE_NM, A.PARENT_TABLE_ID, B.TABLE_NM AS PARENT_TABLE_NM, F.COLUMN_NM AS ID_COL_NAME "+
+                "FROM TB_DS_TABLE A LEFT JOIN TB_DS_TABLE B ON A.PARENT_TABLE_ID = B.TABLE_ID "
+                "INNER JOIN TB_DS_COLUMN C ON A.TABLE_ID = C.TABLE_ID "
+                "INNER JOIN TB_DI_BLOCK_CLASS D ON C.COLUMN_ID = D.COLUMN_ID "
+                "INNER JOIN VW_DI_DOC_LAYOUT_SECTION E ON D.SECTION_CLASS_ID = E.SECTION_CLASS_ID "
+                "LEFT JOIN (SELECT TABLE_ID, COLUMN_NM FROM TB_DS_COLUMN X WHERE X.IS_PK = 'Y') F ON F.TABLE_ID = A.TABLE_ID "
                 "WHERE E.DOC_CLASS_ID = %s "
-                ,['table_id','table_name','parent_table_id','parent_table_name']
+                "GROUP BY A.TABLE_ID, A.TABLE_NM, A.PARENT_TABLE_ID, B.TABLE_NM, F.COLUMN_NM "
+                ,['table_id','table_name','parent_table_id','parent_table_name','id_col_name']
         ),
-        
+        "selectBreakCreate": ("SELECT B.CREATE_ID, B.STATUS, A.LAYOUT_CLASS_ID, A.LAYOUT_NM, A.DOC_CLASS_ID, A.IMG_PREPROCESS_INFO, A.CLASSIFY_AI_INFO, A.TEMPLATE_FILE_PATH "
+                "FROM TB_DI_LAYOUT_CLASS AS A INNER JOIN TB_AI_CREATE B ON A.LAYOUT_CLASS_ID=B.LAYOUT_CLASS_ID "+
+                "WHERE B.END_DATE IS NULL AND B.STATUS NOT IN ('U','W','H','D') " # U(미준비),W(대기),H(높은우선순위),D(비활성화)   
+            ,['create_id','first_status','layout_class_id','layout_name','doc_class_id','img_preprocess_info','classify_ai_info','template_file_path']
+        ),
+        "selectBreakRun": ("SELECT A.RUN_ID, A.DAG_ID, A.START_DATE, A.END_DATE, A.STATUS "+
+                "FROM TB_AF_RUN A"+
+                "WHERE A.DAG_ID = %s AND A.RUN_ID = %s AND A.END_DATE IS NULL "
+            ,['run_id']
+        ),
     }
     print(" query : ",map[key][0],params)
     result = execute(map[key][0], params=params, fetch=True, dictionary=dictionary)
@@ -119,7 +137,11 @@ def select_row_map(key, params:tuple=None, dictionary:bool=False):
                 "LIMIT 1 "
                 ,['section_class_id','section_type','block_class_id','default_text','block_box','row','col']
         ),
-
+        "selectNextLayoutInfo": ("SELECT B.CREATE_ID, B.STATUS, A.LAYOUT_CLASS_ID, A.LAYOUT_NM, A.DOC_CLASS_ID, A.IMG_PREPROCESS_INFO, A.CLASSIFY_AI_INFO, A.TEMPLATE_FILE_PATH "
+                "FROM TB_DI_LAYOUT_CLASS AS A INNER JOIN TB_AI_CREATE B ON A.LAYOUT_CLASS_ID=B.LAYOUT_CLASS_ID "+
+                "WHERE B.STATUS IN ('W','H') ORDER BY CASE WHEN B.STATUS = 'H' THEN 1 WHEN B.STATUS = 'W' THEN 2 ELSE 3 END, B.RGDT LIMIT 1 " # W(대기),H(높은우선순위)
+            ,['create_id','first_status','layout_class_id','layout_name','doc_class_id','img_preprocess_info','classify_ai_info','template_file_path']
+        ),
     }
     print(" query : ",map[key][0],params)
     result = execute(map[key][0], params=params, fetch=True, dictionary=dictionary)
@@ -208,10 +230,10 @@ def insert_structed_ocr_result(doc_class_id:str, structed_doc:dict=None, complet
     # 부모가 없는 테이블 먼저 작업
     pk_map = {}
     print("===================",structed_doc)
-            
+    
     for table_info in table_list:
         if table_info["parent_table_name"] is None:
-            # TB_OCR_BILD_BASIC_INFO에 먼저 데이터 삽입 및 BILD_SEQ_NUM 얻기
+            # 부모테이블이 없어 단독으로 넣을 수 있는 테이블 먼저 데이터 삽입 및 PK 얻기
             table_id = table_info["table_id"]
             table_name = table_info["table_name"]
             pk_name = table_info["pk"]
@@ -233,10 +255,18 @@ def insert_structed_ocr_result(doc_class_id:str, structed_doc:dict=None, complet
                 col_list.remove("_ID")
             if '_PAR_ID' in col_list:
                 col_list.remove("_PAR_ID")
-            if 'id' in col_list:
-                col_list.remove("id")
-            if 'par_id' in col_list:
-                col_list.remove("par_id")
+            # 실제 DB에 없는 컬럼은 제외
+            select_query = """
+                SELECT A.COLUMN_NM FROM TB_DS_COLUMN A WHERE A.TABLE_ID = %s AND IS_EXIST='N'
+                """
+            params = (table_id,)
+            dict_key_list = ['col_nm']
+            print(" query : ",select_query,params)
+            result = execute(select_query, params=params, fetch=True)
+            not_exist_col_list = tuples_to_dicts(result,dict_key_list)
+            for row in not_exist_col_list:
+                if row["col_nm"] in col_list:
+                    col_list.remove(row["col_nm"])
             if not col_list:
                 print(f"경고: {table_name} 테이블에 삽입할 데이터가 없습니다.")
                 continue
@@ -278,10 +308,6 @@ def insert_structed_ocr_result(doc_class_id:str, structed_doc:dict=None, complet
                 col_list.remove("_ID")
             if '_PAR_ID' in col_list:
                 col_list.remove("_PAR_ID")
-            if 'id' in col_list:
-                col_list.remove("id")
-            if 'par_id' in col_list:
-                col_list.remove("par_id")
             
             if not col_list:
                 print(f"경고: {table_name} 테이블에 삽입할 데이터가 없습니다.")
@@ -388,6 +414,7 @@ def select_doc_class_id_list():
         INNER JOIN dococr.TB_DI_LAYOUT_CLASS AS T2
         WHERE T1.DOC_CLASS_ID = T2.DOC_CLASS_ID
         AND T2.USE_YN = 'Y'
+        WHERE USE_YN = 'Y'
         ORDER BY DOC_CLASS_ID
     """
 
@@ -411,66 +438,8 @@ def select_infos_for_dag_generation():
     """
     DAG 동적 생성을 위해 TB_DI_DOC_CLASS 및 TB_DI_LAYOUT_CLASS 테이블에서 필요한 정보를 조회합니다.
     """
-    # INFO 컬럼 이름 목록 (INFO 유효성 검사에 사용할 컬럼만)
-    info_columns = [
-        'SEPARATE_SECTION_INFO', 
-        'SEPARATE_BLOCK_INFO', 
-        'OCR_INFO', 
-        'CLEANSING_INFO', 
-        'STRUCTURING_INFO', 
-        'IMG_PREPROCESS_INFO', 
-        'CLASSIFY_AI_INFO'
-    ]
     
-    # 각 INFO 컬럼에 대해 NULL, 빈 문자열, 그리고 빈 JSON 객체('{}')가 아닌 조건을 추가합니다.
-    # 데이터베이스 종류에 따라 빈 JSON 객체를 확인하는 로직(예: TRIM/REPLACE)은 달라질 수 있습니다.
-    # 여기서는 범용적인 IS NOT NULL과 TRIM(컬럼) <> '' 조건을 사용하고,
-    # 필요에 따라 JSON 관련 조건을 추가합니다. (MySQL/PostgreSQL의 JSON 함수 사용 가능)
-    # * 여기서는 문자열 기반의 간단한 체크만 적용합니다.
-    where_conditions = []
-    for col in info_columns:
-        # 1. NULL이 아닐 것
-        # 2. 공백 제거 후 빈 문자열이 아닐 것
-        # 3. 빈 JSON 객체 문자열이 아닐 것 (데이터베이스 종류에 따라 달라질 수 있음)
-        where_conditions.append(f"""
-             ({col} IS NOT NULL 
-             AND TRIM({col}) <> '' 
-             AND TRIM(REPLACE(REPLACE({col}, ' ', ''), '\t', '')) <> '{{}}'
-             AND TRIM(REPLACE(REPLACE({col}, ' ', ''), '\t', '')) <> '\"{{}}\"') 
-        """)
-        
-    where_clause = " AND ".join(where_conditions)
-    
-    query = f"""
-        SELECT
-            T1.SECTION_CLASS_ID,
-            T1.LAYOUT_CLASS_ID,
-            T1.SECTION_ORDR,
-            T2.DOC_CLASS_ID,
-            T2.LAYOUT_ORDR,
-            T2.USE_YN,
-            T1.SEPARATE_SECTION_INFO,
-            T1.SEPARATE_BLOCK_INFO,
-            T1.OCR_INFO,
-            T1.CLEANSING_INFO,
-            T1.STRUCTURING_INFO,
-            T2.IMG_PREPROCESS_INFO,
-            T2.CLASSIFY_AI_INFO
-        FROM
-            TB_DI_SECTION_CLASS T1
-        INNER JOIN
-            TB_DI_LAYOUT_CLASS T2 ON T1.LAYOUT_CLASS_ID = T2.LAYOUT_CLASS_ID
-        WHERE
-            ({where_clause})
-        ORDER BY
-            T2.LAYOUT_ORDR, T1.SECTION_ORDR
-    """
-
-    print(" query : ", query)
-    try:
-        # execute 함수가 정의되어 있다고 가정
-        result = execute(query, fetch=True, dictionary=True)
-        return result if result else [], info_columns
-    except Exception as e:
-        print(f"❌ TB_DI_DOC_CLASS 및 TB_DI_LAYOUT_CLASS 조회 오류: {e}")
-        raise e
+    query = """SELECT T2.DOC_CLASS_ID, T2.DOC_NM AS DOC_NAME FROM TB_DI_DOC_CLASS T2 ORDER BY T2.DOC_CLASS_ID"""
+    columns = ["doc_class_id","doc_name"]
+    result = execute(query, fetch=True)
+    return tuples_to_dicts(result,columns)
