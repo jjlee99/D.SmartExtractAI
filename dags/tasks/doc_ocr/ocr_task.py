@@ -315,7 +315,7 @@ def aggregate_ocr_results_task(file_infos:list[dict],**context):
         doc_class_id = dococr_query_util.select_doc_class_id(params=layout_class_ids) 
         # 결과 조립
         
-        error_match = {"고정_텍스트": [error_merged]}
+        error_match = {"title_area": [error_merged]}
         
         doc_info_list.append({
             "file_id": file_id,

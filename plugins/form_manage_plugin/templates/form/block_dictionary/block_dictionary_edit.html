@@ -9,32 +9,32 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="form-group">
-    <label>서식명</label>
+    <label>{{_("문서명")}}</label>
     <input type="text" class="form-control" value="{{ data.doc_nm }}" readonly>
   </div>
 
   <div class="form-group">
-    <label>레이아웃명</label>
+    <label>{{_("레이아웃명")}}</label>
     <input type="text" class="form-control" value="{{ data.layout_nm }}" readonly>
   </div>
 
   <div class="form-group">
-    <label>섹션명</label>
+    <label>{{_("구역명")}}</label>
     <input type="text" class="form-control" value="{{ data.section_nm }}" readonly>
   </div>
 
   <div class="form-group">
-    <label>블록 행/열</label>
+    <label>{{_("블록 행/열")}}</label>
     <input type="text" class="form-control" value="{{ data.block_pos }}" readonly>
   </div>
 
   <div class="form-group">
-    <label>교정대상단어</label>
+    <label>{{_("교정 대상 텍스트")}}</label>
     <input type="text" class="form-control" name="error_text" value="{{ data.error_text }}">
   </div>
 
   <div class="form-group">
-    <label>교정단어</label>
+    <label>{{_("교정 텍스트")}}</label>
     <input type="text" class="form-control" name="crrct_text" value="{{ data.crrct_text }}">
   </div>
 

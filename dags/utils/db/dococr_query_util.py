@@ -169,6 +169,15 @@ def select_one_map(key, params:tuple=None):
         return result[0][0]  # 값 1개만 반환
     else:
         return None 
+def check_map(key, params: tuple = None):
+    map = {
+        "checkTableExists": "SELECT COUNT(*) FROM TB_DS_TABLE A WHERE A.TABLE_NM = %s AND IS_EXIST='Y'",
+    }
+    print(" query : ", map[key], params)
+    result = execute(map[key], params=params, fetch=True)
+    print("result : ", result)
+    return result[0][0]  # 값 1개만 반환
+
 
 #공통
 def tuples_to_dicts(rows, columns):

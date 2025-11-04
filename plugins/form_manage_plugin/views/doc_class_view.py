@@ -204,11 +204,12 @@ class DocClassManageView(FormManageModelView):
                 try:
                     for key, value in form.data.items():
                         item[key] = value
+                    item["use_yn"] = "N"  
                     self.pre_add(item)
                 except Exception as e:
                     flash(str(e), "danger")
                 else:
-                    param = (item["doc_name"],)
+                    param = (item["doc_name"],item["use_yn"])
                     manage_query_util.insert_map("insertDocClass",param) # update 쿼리 실행
                     self.post_add(item)
                     flash("정상적으로 처리되었습니다.", "success")

@@ -27,8 +27,8 @@ RESULT_FOLDER = Variable.get("RESULT_FOLDER", default_var="/opt/airflow/data/res
 TEMP_FOLDER = Variable.get("TEMP_FOLDER", default_var="/opt/airflow/data/temp")
 CLASS_FOLDER = Variable.get("CLASS_FOLDER", default_var="/opt/airflow/data/class/")
 NONE_CLASS_FOLDER = Variable.get("NONE_CLASS_FOLDER", default_var="/opt/airflow/data/common/none_class") # 비서식 일반 문서 이미지
-CREATE_DATASET_SIZE = Variable.get("DATASET_SIZE", default_var="200") # DATASET사이즈
-CREATE_AUGMENT_POLICY = Variable.get("AUGMENT_POLICY", default_var="default") # default,always,skip
+CREATE_DATASET_SIZE = Variable.get("CREATE_DATASET_SIZE", default_var="200") # DATASET사이즈
+CREATE_AUGMENT_POLICY = Variable.get("CREATE_AUGMENT_POLICY", default_var="default") # default,always,skip
 
 
 #데이터가 충분하지 않을 때 증강을 통해 데이터셋을 확장합니다.
@@ -301,9 +301,8 @@ def train(dataset: dict, layout_info: dict):
 @task(pool='ocr_pool')
 def complete_runtime(result_map:dict, layout_info:dict ,**context):
     dococr_query_util.update_map("updateCreateEnd",params=('C',str(layout_info.get("create_id")),))
-    if layout_info.get("first_status") == 'W':
-        # 정기 실행대상은 완료 후 다음 작업을 미준비로 자동 등록(루프 방지)
-        dococr_query_util.insert_map("insertCreateUnready",params=(str(layout_info.get("doc_class_id")), str(layout_info.get("layout_class_id")),))
+    # 완료 후 다음 작업을 미준비로 자동 등록(루프 방지)
+    dococr_query_util.insert_map("insertCreateUnready",params=(str(layout_info.get("doc_class_id")), str(layout_info.get("layout_class_id")),))
     
     run_id = context['dag_run'].run_id
     if run_id.startswith("manual__"):
@@ -327,11 +326,12 @@ def complete_runtime(result_map:dict, layout_info:dict ,**context):
             import datetime
             try:
                 new_run_id = f"manual--{datetime.datetime.now().isoformat()}"
+                print("create session",new_run_id)
                 dr = DagRun(
                     dag_id=dag_id,
                     run_id=new_run_id,
                     conf=next_layout,
-                    execution_date=context['ts'],  # 권장: context timestamp 활용
+                    execution_date=context['ts'],  # context timestamp 활용
                     start_date=datetime.datetime.now(),
                     external_trigger=True,
                     state=State.RUNNING,

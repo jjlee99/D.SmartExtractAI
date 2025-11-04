@@ -40,7 +40,7 @@ def setup_next_layout_info(**context):
     return layout_info
 
 
-@task(pool='ocr_pool') 
+
 def final_cleanup(**context):
     dag_id = context['dag'].dag_id
     run_id = context['dag_run'].run_id

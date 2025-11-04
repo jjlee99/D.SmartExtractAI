@@ -32,6 +32,11 @@ def translate_output_task(table_list:list,**context):
         id_col_name = table_info["id_col_name"]
         logger.info(f"테이블 '{table_name}' 번역, 업데이트 및 로그 기록 시작...")
 
+        check_table_exists = dococr_query_util.check_map("checkTableExists", params=(table_name,))
+        if check_table_exists<=0:
+            logger.info(f"테이블 '{table_name}'은 아직 존재하지 않습니다.")
+            return 
+
         # 1. 가장 큰 ID를 가진 로우를 찾습니다. (ID가 시퀀스 번호 역할)
         trn_target_row_list = dococr_query_util.select_translate_target_list(table_name, id_col_name)
         

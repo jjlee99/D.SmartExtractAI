@@ -952,6 +952,12 @@ btnSave.addEventListener("click", (e) => {
     e.preventDefault();
     if(!dvsBlankChk()) return false; // 구분이 선택인 경우의 삭제할것인지 체크
     if (validationData()) { // validation
+        // 요청 시작 전 로딩 개체 표시
+        // $('#react-loading').show();
+        $('#loadingModal').modal('show');
+        // 저장 버튼 비활성화 (재클릭 방지)
+        $('#btn_save').prop('disabled', true);
+        
         const formData = new FormData();
         const data = blockObjects.map(obj => ({
             blockClassId: obj.blockClassId,
@@ -982,7 +988,17 @@ btnSave.addEventListener("click", (e) => {
             error: function(e) {
                 alert("저장 중 문제가 발생하였습니다.");
                 // ✅ 실패 시 후처리 필요
+                $('#loadingModal').modal('hide');
+                $('#btn_save').prop('disabled', false);
             },
+            complete: function(xhr, status) {
+                // success에서 리다이렉트가 발생하면 이 코드는 실행되지 않지만,
+                // error 또는 res.status가 success가 아닐 경우 실행되어야 합니다.
+                if (status !== 'success' || (xhr.responseJSON && xhr.responseJSON.status !== 'success')) {
+                    $('#loadingModal').modal('hide');
+                    $('#btn_save').prop('disabled', false);
+                }
+            }
         });
     }
 });

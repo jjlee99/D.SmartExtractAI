@@ -47,7 +47,7 @@ class SectionClassManageView(FormManageModelView):
         "rgdt": _("생성일"),
         "updt": _("수정일"),
         "doc_class_info": _("문서명"),
-        "layout_class_info": _("레이아웃"),
+        "layout_class_info": _("레이아웃명"),
         "block_type": _("구역 블록타입"),
     }
     def text_formatter(value):

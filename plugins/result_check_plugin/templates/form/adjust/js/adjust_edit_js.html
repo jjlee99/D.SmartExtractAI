@@ -40,6 +40,7 @@ let coordinate = {};             // 그려진 coordinate 좌표 정보
 let scaleFactor = 0;
 let borderDataList = [];         // 화면에 그려질 border 좌표 설정
 let dataByPage = {};
+let ColNameMap = {};
 
 /**
  * =======================================
@@ -66,7 +67,13 @@ function init() {
 /**
  * 서버에서 데이터(이미지 URL 및 영역 정보)를 불러오는 함수
  */
-const loadData = () => {
+const loadData = async () => {
+
+    try {
+        await loadColumnMapping(); 
+    } catch (e) {
+        console.error('컬럼 맵핑 로드 실패:', e);
+    }
     
     if (!completeId) {
         alert('complete_id 정보를 조회할 수 없습니다.');
@@ -111,12 +118,22 @@ const loadData = () => {
  */
 function buildBorderDataIndex(data) {
     dataByPage = {};
+    // 1. 맵핑 객체 정의
+    const keyMap = {
+        'title_area': '속성 영역',
+        'data_area': '데이터 영역'
+        // 필요한 다른 맵핑이 있다면 여기에 추가합니다.
+    };
 
     let navKeys = Object.keys(data);
     navKeys.forEach(navKey => {
         if (!navKey) return;
         const safeNavKey = navKey.replace(/\s+/g, '_');
-        console.log(`buildBorderDataIndex navKey 키: ${safeNavKey} =====`);
+
+        // 3. 맵핑 적용: keyMap에 safeNavKey가 있으면 변환된 값 사용, 없으면 safeNavKey 그대로 사용
+        const displayNavKey = keyMap[safeNavKey] || safeNavKey;
+
+        console.log(`buildBorderDataIndex navKey 키: ${displayNavKey} (원본: ${safeNavKey}) =====`); // 출력 시 변환된 키 사용
         
         const rowArray = mapData[navKey];
         rowArray.forEach((rowElement, rowIdx) => {
@@ -132,11 +149,16 @@ function buildBorderDataIndex(data) {
                         }
 
                         dataByPage[pageNum].push({
-                            navKey: safeNavKey,           // 테이블 키 
+                            navKey: safeNavKey,
+                            displayKey : displayNavKey,         // 테이블 키 
                             rowIdx: rowIdx,             // 행 
                             fieldKey: fieldKey,       // 필드 키 
                             box: element.block_box,   // block_box 데이터
+                            section_class_id : element.section_class_id,
                             structed_text: element.structed_text, 
+                            default_text: element.default_text,
+                            section_row: element.section_row,
+                            section_col: element.section_col,
                         });
                     }
                 });
@@ -219,17 +241,19 @@ function updateUIForPage(pageNum) {
 
     if (!dataForPage || dataForPage.length === 0) {
         console.warn(`페이지 ${pageNum}에 데이터가 없습니다.`);
-        accordion.innerHTML = '<div class="panel panel-default"><div class="panel-body">이 페이지에는 데이터가 없습니다.</div></div>';
+        accordion.innerHTML = '<div style="padding: 15px; border: 1px solid #ddd;">이 페이지에는 데이터가 없습니다.</div>';
         return;
     }
 
     // nav 생성
-    const navKeysOnPage = new Set(dataForPage.map(element => element.navKey));
+    const navKeysOnPage = new Map(dataForPage.map(element => [element.navKey, element.displayKey])); // 👈 Map 객체로 변경
+
+
     console.log(`페이지 ${pageNum}의 nav 키:`, navKeysOnPage);
 
-    navKeysOnPage.forEach(key => {
-        if (!key) return;
-        navigation.insertAdjacentHTML('beforeend', ` <li class="nav-item" data-key=${key}><a class="nav-link" href="#">${key}</a></li>`);
+    navKeysOnPage.forEach((displayLabel, originalKey) => {
+        if (!originalKey) return;
+        navigation.insertAdjacentHTML('beforeend', ` <li class="nav-item" data-key=${originalKey}><a class="nav-link" href="#">${displayLabel}</a></li>`);
     });
 
     navItemList = document.querySelectorAll('.nav-item');
@@ -238,7 +262,7 @@ function updateUIForPage(pageNum) {
         const firstKey = navItemList[0].dataset.key;
         renderContent(pageNum, firstKey);
     } else {
-        accordion.innerHTML = '<div class="panel panel-default"><div class="panel-body">표시할 콘텐츠가 없습니다.</div></div>';
+        accordion.innerHTML = '<div style="padding: 15px; border: 1px solid #ddd;">표시할 콘텐츠가 없습니다.</div>';
     }
 }
 
@@ -273,6 +297,10 @@ function renderContent(pageNum, selectedKey) {
         rowsGrouped[rowIdx][element.fieldKey] = {
             block_box: element.box,
             structed_text: element.structed_text,
+            section_class_id : element.section_class_id,
+            default_text: element.default_text, 
+            section_row: element.section_row,  
+            section_col: element.section_col,
         };
     });
     
@@ -300,36 +328,11 @@ function renderContent(pageNum, selectedKey) {
  * @returns {HTMLDivElement} - 생성된 최상위 div 요소
  */
 function createAccordionItemElement(index, dataObject) {
-	const panelDefault = document.createElement('div');
-	panelDefault.classList.add('panel', 'panel-default');
-
-	// panel-heading 영역 생성
-	const panelHeader = document.createElement('div');
-	panelHeader.classList.add('panel-heading');
-	panelHeader.id = `heading${index}`;
-	panelHeader.role = 'tab';
-
-	const panelTitle = document.createElement('h4');
-	panelTitle.classList.add('panel-title');
-
-	const panelButton = document.createElement('a');
-	panelButton.setAttribute('data-toggle', 'collapse');
-	panelButton.setAttribute('data-parent', `#accordion`);
-	panelButton.setAttribute('aria-expanded', "false"); // 기본 닫기 설정
-	panelButton.setAttribute('aria-controls', `collapse${index}`);
-	panelButton.href = `#collapse${index}`;
-	panelButton.textContent=`row${index+1}`;
-
-	// div body 생성
-	const collapse = document.createElement('div');
-	collapse.classList.add('panel-collapse', 'collapse');
-	collapse.role = 'tabpanel';
-	collapse.id = `collapse${index}`;
-	collapse.setAttribute('row-idx', index);
-	collapse.setAttribute('aria-labelledby', panelHeader.id);
+	
 	
 	const panelBody = document.createElement('div');
 	panelBody.classList.add('panel-body');
+
 
 
 	// 테이블 생성
@@ -339,12 +342,30 @@ function createAccordionItemElement(index, dataObject) {
     // colgroup 생성
     const colgroup = document.createElement("colgroup");
     const col1 = document.createElement("col");
-    col1.style.width = "30%";
+    col1.style.width = "15%";
     const col2 = document.createElement("col");
-    col2.style.width = "70%";
+    col2.style.width = "10%";
+    const col3 = document.createElement("col");
+    col3.style.width = "37.5%";
+    const col4 = document.createElement("col");
+    col4.style.width = "37.5%";
+
 
 	const thead = document.createElement('thead');
-	thead.innerHTML = `<tr><td>키</td><td>값</td></tr>`;
+    thead.classList.add('thead-highlight');
+    const Style = 'border-right: 1px solid #dee2e6; text-align: center;';
+    const Style2 = 'border-right: 1px solid #dee2e6;';
+	thead.innerHTML = `
+    <tr>
+        <td style="${Style2}">구역명</td>
+        <td style="${Style}">행렬</td>
+        <td style="${Style2}">오류 텍스트</td>
+        <td style="${Style2}">수정 텍스트</td>
+    </tr>
+    
+    `;
+
+    // TODO : 이곳에 회색 음영처리
 	const tbody = document.createElement('tbody');
 
 	// dataObject의 각 키-값 쌍에 대해 테이블 행 생성
@@ -361,20 +382,49 @@ function createAccordionItemElement(index, dataObject) {
 
     colgroup.appendChild(col1);
     colgroup.appendChild(col2);
+    colgroup.appendChild(col3);
+    colgroup.appendChild(col4);
     table.appendChild(colgroup);
 	table.appendChild(thead);
 	table.appendChild(tbody);
 	panelBody.appendChild(table);
-	collapse.appendChild(panelBody);
 
-	panelTitle.appendChild(panelButton);
-	panelHeader.appendChild(panelTitle);
-
-	panelDefault.appendChild(panelHeader);
-	panelDefault.appendChild(collapse);
-
-	return panelDefault;
+	return panelBody;
 }
+
+
+
+/**
+ * 컬럼명 맵핑 데이터 불러오기. 
+ * @returns {Promise<void>}
+ */
+function loadColumnMapping() {
+    return fetch('/adjust/section_mapping') 
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success' && Array.isArray(data.mapping)) {
+                // 맵핑 리스트를 '영문 구역명': '한글 구역명' 형태의 딕셔너리로 변환
+                data.mapping.forEach(item => {
+                    ColNameMap[item.id] = item.name;
+                });
+                console.log("✅ 컬럼 맵핑 로드 완료:", ColNameMap);
+            } else {
+                console.error("컬럼 맵핑 데이터 형식이 올바르지 않습니다.");
+            }
+        })
+        .catch(error => {
+            console.error('컬럼 맵핑 로드 중 오류 발생:', error);
+            // 오류 발생 시에도 빈 객체로 유지하여 프로그램 중단 방지
+            ColNameMap = {}; 
+        });
+}
+
+
 
 /**
  * 테이블 행(tr) DOM 요소를 생성하는 헬퍼 함수
@@ -382,10 +432,14 @@ function createAccordionItemElement(index, dataObject) {
  * @param {object} valueObject - 데이터의 값 객체 (예: { block_box: [...], structed_text: "..." })
  * @returns {HTMLTableRowElement} - 생성된 tr 요소
  */
+
+
+ 
 function createTableRowElement(key, valueObject) {
     const tr = document.createElement('tr');
     tr.classList.add('detail-row');
-
+    const Style = 'border-right: 1px solid #dee2e6; text-align: center;';
+    const Style2 = 'border-right: 1px solid #dee2e6;';
     // block_box 좌표가 있다면 data-* 속성으로 추가
     if (valueObject.block_box && valueObject.block_box.length === 4) {
         borderDataList.push(valueObject.block_box);
@@ -396,29 +450,76 @@ function createTableRowElement(key, valueObject) {
         tr.setAttribute('data-coordinate-h', valueObject.block_box[3]);
     }
 
-    // 첫 번째 셀 (키)
-    const tdKey = document.createElement('td');
-    tdKey.textContent = `${key}`;
 
-    // 두 번째 셀 (값)
-    const tdValue = document.createElement('td');
-    
-    // length에 따라 textarea or input 생성
-    let inputElement
-    if (valueObject.structed_text.length > TEXT_MAX_LEN) {
-        inputElement = document.createElement('textarea');
-        inputElement.rows = TEXT_MAX_LEN_ROW;
-    } else {
-        inputElement = document.createElement('input');
-        inputElement.type = 'text';
+    // 1. 구역명 <td> (수정 부분) --------------------------------
+    const tdZoneName = document.createElement('td');
+    let finalDisplay = valueObject.section_class_id; // 기본값은 원본 key (영문명)으로 설정
+    //  맵핑 딕셔너리(ColNameMap)를 순회하며 유사 일치하는 컬럼명 찾음
+    //    Object.keys(ColNameMap)는 맵핑 딕셔너리의 키 (예: 'FLR_STRUCT_TYPE') 리스트를 반환
+    const columnKeys = Object.keys(ColNameMap);
+
+    for (let i = 0; i < columnKeys.length; i++) {
+        const mapKey = columnKeys[i]; // 맵핑 리스트의 키 (예: 'FLR_STRUCT_TYPE')
+        console.log(`Comparing valueObject.section_class_id: ${valueObject.section_class_id} with mapKey: ${mapKey}`);
+        // **2. 핵심 유사 일치 검사:**
+        // section_class_id와 mapKey가 일치하는지 확인
+        if (valueObject.section_class_id == mapKey) {
+            finalDisplay = ColNameMap[mapKey];
+            // 일치하는 것을 찾았으므로 반복을 중단합니다.
+            break; 
+        }
     }
-    inputElement.name = key;
-    inputElement.value = valueObject.structed_text || '';
-    inputElement.classList.add('form-control');
+    tdZoneName.textContent = finalDisplay; 
+    tdZoneName.style = Style2;
+    
+    // 원본 key는 data 속성으로 유지
+    tdZoneName.setAttribute('data-column-nm', key);
+    
+    tr.appendChild(tdZoneName);
+    
 
-    tdValue.appendChild(inputElement);
-    tr.appendChild(tdKey);
-    tr.appendChild(tdValue);
+    
+    // 2. 행렬 <td> (원하는 형식: section_row/section_col)
+    const tdRowCol = document.createElement('td');
+    // section_row와 section_col은 valueObject 내에 있으므로 사용합니다.
+    const rowNum = valueObject.section_row !== undefined ? valueObject.section_row : '?';
+    const colNum = valueObject.section_col !== undefined ? valueObject.section_col : '?';
+    tdRowCol.textContent = `${rowNum}/${colNum}`;
+    tdRowCol.style = Style; 
+    tr.appendChild(tdRowCol);
+
+    // 3. 오류 텍스트 <td> (structed_text) -
+    const tdErrorText = document.createElement('td');
+    const errorText = valueObject.structed_text || '';
+    tdErrorText.textContent = errorText; 
+    tdErrorText.style = Style2;
+    tr.appendChild(tdErrorText);
+
+    // 입력 요소 부분 각주처리
+    {# let errorInputElement;
+    if (errorText.length > TEXT_MAX_LEN) {
+        errorInputElement = document.createElement('textarea');
+        errorInputElement.rows = TEXT_MAX_LEN_ROW;
+    } else {
+        errorInputElement = document.createElement('input');
+        errorInputElement.type = 'text';
+    }
+    
+    // 이 입력 필드의 name은 기존과 같이 key를 사용하여 백엔드 수정 데이터를 매핑합니다.
+    errorInputElement.name = key; 
+    errorInputElement.value = errorText; 
+    errorInputElement.classList.add('form-control');
+
+    tdErrorText.appendChild(errorInputElement);
+    tr.appendChild(tdErrorText); #}
+
+    // 4. 수정 텍스트 <td> (default_text) - 단순 텍스트로 표시
+    const tdCorrectionText = document.createElement('td');
+    const correctionText = valueObject.default_text || '';
+
+    tdCorrectionText.textContent = correctionText; 
+    tdCorrectionText.style = Style2;
+    tr.appendChild(tdCorrectionText);
 
     return tr;
 }
@@ -534,7 +635,7 @@ function navigationActiveChangeEvent(e) {
 function handleDataUpdate(e) {
     e.preventDefault();
 
-    if (!confirm('전체 데이터를 교정사전에 저장하시겠습니까?')) return;
+    if (!confirm('전체 데이터를 조건별 교정사전에 저장하시겠습니까?')) return;
 
     // 💡 백엔드 요구 사항(message: "'data' field missing...")에 맞춰 mapData를 'data' 필드 안에 래핑합니다.
     const requestPayload = {

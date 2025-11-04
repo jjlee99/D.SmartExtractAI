@@ -140,7 +140,7 @@ def export_to_excel(
                 excel_row = []
                 for k in col_keys:
                     val = row.get(k)
-                    if val is not None:
+                    if val is not None and isinstance(val, dict):
                         val = val.get("structed_text", "")
                     else:
                         val = ""

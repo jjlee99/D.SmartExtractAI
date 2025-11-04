@@ -15,9 +15,9 @@ class BlockDictionaryManageView(FormManageModelView):
     list_template = template_base + "/block_dictionary_list.html"
 
     label_columns = {
-        "doc_nm": _("서식명"),
+        "doc_nm": _("문서명"),
         "layout_nm": _("레이아웃명"),
-        "section_nm": _("섹션명"),
+        "section_nm": _("구역명"),
         "block_pos": _("블록 행/열"),
         "error_text": _("교정 대상 텍스트"),
         "crrct_text": _("교정 텍스트"),

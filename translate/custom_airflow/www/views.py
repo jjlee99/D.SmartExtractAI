@@ -765,6 +765,25 @@ class Airflow(AirflowBaseView):
     @auth.has_access_view()
     def index(self):
         """Home view."""
+        from airflow.www.app import cached_app
+        app = cached_app()
+        if app and hasattr(app, 'appbuilder'):
+            # AppBuilder 인스턴스에서 메뉴 객체 추출
+            airflow_menu_instance = app.appbuilder.menu
+            main_categories = airflow_menu_instance.menu
+            
+            # 최상위 메뉴 항목의 label을 리스트로 추출
+            current_menu_order = [item.label for item in main_categories]
+            
+            # 콘솔(Webserver 로그)에 메뉴 순서 출력
+            print("--- Airflow 최상위 메뉴 순서 (Plugin Index View에서 확인) ---")
+            print(current_menu_order)
+            print("---------------------------------------------------------")
+
+        else:
+            print("Airflow 앱 또는 AppBuilder 인스턴스를 찾을 수 없어 메뉴를 확인할 수 없습니다.")
+
+
         from airflow.models.dag import DagOwnerAttributes
 
         hide_paused_dags_by_default = conf.getboolean("webserver", "hide_paused_dags_by_default")

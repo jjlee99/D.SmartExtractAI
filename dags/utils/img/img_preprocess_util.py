@@ -449,13 +449,13 @@ def del_blank_set2(
     padding_top_ratio, padding_bottom_ratio, padding_left_ratio, padding_right_ratio = padding_ratios
     # 4. 백분율 패딩을 픽셀 값으로 변환
     # 긴 수평선이 감지된 영역의 높이
-    content_h = y_end - y_start
+    content_h = (y_end + 1) - y_start
     # 긴 수직선이 감지된 영역의 너비
-    content_w = x_end - x_start
+    content_w = (x_end + 1) - x_start
     print("kkkkkkkkkkkkkkkkkkkkcontent_length : ",content_h, content_w)
     if iter_save:
-        cropped_img = img_np_bgr[y_start:y_end, x_start:x_end]
-        file_path = type_convert_util.convert_type(cropped_img, "np_gray", "file_path")
+        cropped_img = img_np_bgr[y_start:(y_end + 1), x_start:(x_end+1)]
+        file_path = type_convert_util.convert_type(cropped_img, "np_bgr", "file_path")
         save(file_path, "del_blank_set2_content_img",result_map=result_map)
     
     pad_top_px = int(content_h * padding_top_ratio)
@@ -470,13 +470,13 @@ def del_blank_set2(
     
     # 5. 패딩 적용 및 최종 좌표 계산
     target_y_start = y_start - pad_top_px
-    target_y_end = y_end + 1 + pad_bottom_px
+    target_y_end = (y_end + 1) + pad_bottom_px
     target_x_start = x_start - pad_left_px
-    target_x_end = x_end + 1 + pad_right_px
+    target_x_end = (x_end + 1) + pad_right_px
     print("kkkkkkkkkkkkkkkkkkkktarget_length : ",target_y_start, target_y_end, target_x_start, target_x_end)
     if iter_save:
-        cropped_img = img_np_bgr[y_start:y_end, x_start:x_end]
-        file_path = type_convert_util.convert_type(cropped_img, "np_gray", "file_path")
+        cropped_img = img_np_bgr[y_start:(y_end + 1), x_start:(x_end + 1)]
+        file_path = type_convert_util.convert_type(cropped_img, "np_bgr", "file_path")
         save(file_path, "del_blank_set2_normalize_img",result_map=result_map)
 
     # 6. 새 캔버스(배경) 생성
@@ -564,15 +564,15 @@ def calc_padding_set2(img_np_bgr: np.ndarray, result_map:dict, line_ratios: List
     
     # 4. 백분율 패딩을 픽셀 값으로 변환
     # 긴 수평선이 감지된 영역의 높이
-    content_h = y_end - y_start
+    content_h = (y_end + 1)- y_start
     # 긴 수직선이 감지된 영역의 너비
-    content_w = x_end - x_start
+    content_w = (x_end + 1) - x_start
 
     # 패딩픽셀을 비율로 환산
     top_ratio_calc = round(y_start / content_h, 4)
-    bottom_ratio_calc = round((h - y_end) / content_h, 4)
+    bottom_ratio_calc = round((h - (y_end + 1)) / content_h, 4)
     left_ratio_calc = round(x_start / content_w, 4)
-    right_ratio_calc = round((w - x_end) / content_w, 4)
+    right_ratio_calc = round((w - (x_end + 1)) / content_w, 4)
 
     result_map[result_key] = [top_ratio_calc,bottom_ratio_calc,left_ratio_calc,right_ratio_calc]
     return img_np_bgr
@@ -707,10 +707,10 @@ def calc_angle_set2(img_np_bgr:np.ndarray,angle_key:str, result_map:dict,delta:f
         angles = np.arange(-limit, limit + delta, delta)
         scores = []
         
-        (h, w) = target_img.shape[:2]
-        min_length = int(min(w,h) * 0.1)
-        min_length2 = int(min(w,h) * 0.4)
-
+        (img_h, img_w) = target_img.shape[:2]
+        min_length = int(min(img_w,img_h) * 0.1)
+        min_length2 = int(min(img_w,img_h) * 0.4)
+        
         def long_kernal_score(arr, angle):
             i=0
             #짧은선
@@ -778,7 +778,8 @@ def calc_angle_set2(img_np_bgr:np.ndarray,angle_key:str, result_map:dict,delta:f
             score = long_kernal_score(target_img, angle)
             scores.append(score)
         
-        threshold_val = 50
+        # best_angle이 일정 이하인 경우 무시
+        threshold_val = img_w * 0.05 * img_h * 0.05
         best_angle = angles[scores.index(max(scores))]
         if max(scores) <= threshold_val:
             best_angle = 0
@@ -1078,19 +1079,19 @@ def _rotate(img_np_bgr: np.ndarray, angle:float) -> np.ndarray:
             k = 4 + k
         return np.rot90(img_np_bgr, k=k)
 
-    h, w = img_np_bgr.shape[:2]
-    center = (w//2, h//2)
+    img_h, img_w = img_np_bgr.shape[:2]
+    center = (img_w//2, img_h//2)
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
 
     # 회전 후 이미지 크기 계산
     cos = np.abs(M[0, 0])
     sin = np.abs(M[0, 1])
-    new_w = int((h * sin) + (w * cos))
-    new_h = int((h * cos) + (w * sin))
+    new_w = int((img_h * sin) + (img_w * cos))
+    new_h = int((img_h * cos) + (img_w * sin))
 
     # 회전 중심 조정 (중심 이동)
-    M[0, 2] += (new_w - w) / 2
-    M[1, 2] += (new_h - h) / 2
+    M[0, 2] += (new_w - img_w) / 2
+    M[1, 2] += (new_h - img_h) / 2
 
     # 이미지 테두리에서 가장 많은 색(최빈값) 계산 (예: 흰색/검정)
     def get_most_common_border_color(img):
@@ -1110,8 +1111,7 @@ def _rotate(img_np_bgr: np.ndarray, angle:float) -> np.ndarray:
         borderValue=tuple(most_common.tolist())
     )
     return rotated
-{"name":"cache","cache_key":"_cut1"}
-{"name":"load","cache_key":"_cut1"}
+
 #이후
 function_map = {
     # 공통

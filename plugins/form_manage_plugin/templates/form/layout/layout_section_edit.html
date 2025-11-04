@@ -1,6 +1,7 @@
 {% extends "appbuilder/base.html" %}
 {% import 'appbuilder/general/lib.html' as lib %}
 {% import 'form/layout/js/layout_section_edit_js.html' as js %}
+{% from 'appbuilder/loading_dots.html' import loading_dots %}
 
 {% block content %}
 {{ lib.panel_begin(title) }}
@@ -54,6 +55,9 @@
     </div>
     <div class="pull-right">
         <button id="btn_save" class="btn btn-sm btn-primary">저장<i class="fa fa-save"></i></button>
+        {# <span id="react-loading" style="display: none;"> #}
+                {# {{ loading_dots(id='react-loading') }}  #}
+        {# </span> #}
         <button id="btn_back" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="뒤로" data-original-title="뒤로">
         <i class="fa fa-arrow-left"></i>
         </button>
@@ -173,6 +177,21 @@
             </div>
         </div>
     </form>
+</div>
+
+<div class="modal fade" id="loadingModal" tabindex="-1" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-sm" style="margin-top: 200px;">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <span style="font-size: 24px;"> {{ loading_dots(id='loading-modal-dots') }}
+                </span>
+                <h4 class="mt-3">
+                    처리중입니다...
+                </h4>
+                <p class="text-muted">잠시만 기다려주세요.</p>
+            </div>
+        </div>
+    </div>
 </div>
 {{ js.content() | safe }}
 {% endblock %}

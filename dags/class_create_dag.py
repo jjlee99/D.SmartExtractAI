@@ -6,7 +6,7 @@ from utils.com import json_util
 from utils.db import dococr_query_util
 from tasks.create_ai.class_create_task import build_balanced_dataset, train, image_data_augment, generating_masking_image, complete_runtime
 from tasks.create_ai.img_preprocess_task import img_normalize_task
-from tasks.create_ai.setup_task import check_next_layout_info, final_cleanup, setup_next_layout_info
+from tasks.create_ai.setup_task import check_next_layout_info, setup_next_layout_info, final_cleanup
 from tasks.common.setup_task import setup_runtime, end_runtime
 from airflow.models import Variable,XCom
 from utils.com import file_util
@@ -20,7 +20,7 @@ with DAG(
     dag_id='create_classify_ai_V0.1',
     description="문서 분류 AI 생성 프로세스",
     start_date=datetime(2024, 1, 1),
-    schedule="@weekly",  # None으로 설정하면 수동 트리거만 가능
+    schedule="@daily",  # None으로 설정하면 수동 트리거만 가능
     catchup=False,
     on_failure_callback=final_cleanup,
     tags=['document', 'classify', 'ai', 'augmentation', 'weekly']
