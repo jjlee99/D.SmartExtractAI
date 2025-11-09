@@ -98,7 +98,7 @@ def save(block_data:Tuple[Any,Dict],save_key:str="tmp",tmp_save:bool=False,resul
     result_map["save_path"][save_key]=block_data
     return block_data
 
-def tesseract(block_data:Tuple[Any,Dict], lang:str="kor", config:str="--psm 6", return_type:str="text", iter_save:bool=False, result_map:dict=None) -> List[Tuple[Any, Dict]]:
+def tesseract(block_data:Tuple[Any,Dict], lang:str="kor", config:str="--psm 6", iter_save:bool=False, result_map:dict=None) -> List[Tuple[Any, Dict]]:
     img_np_bgr, block_map = block_data
     
     gray = cv2.cvtColor(img_np_bgr, cv2.COLOR_BGR2GRAY)

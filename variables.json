@@ -5,16 +5,18 @@
     "TEMP_FOLDER": "/opt/airflow/data/temp",
     "UPLOAD_FOLDER": "/opt/airflow/data/upload",
     "CLASS_FOLDER": "/opt/airflow/data/class",
-    "NONE_CLASS_FOLDER": "/opt/airflow/data/common/none_class",
     "COMPLETE_FOLDER": "/opt/airflow/data/complete",
     "FAILED_FOLDER": "/opt/airflow/data/failed",
-    "TEMPLATE_FOLDER": "/opt/airflow/data/template",
-    "MASK_FOLDER": "/opt/airflow/data/mask",
-    "BASE_URL": "http://192.168.10.18:9191",
+
     "CREATE_DATASET_SIZE": "200",
     "CREATE_AUGMENT_POLICY": "default",
-    "CREATE_NORMALIZE_POLICY": "default"
+    "CREATE_NORMALIZE_POLICY": "default",
+
+    "NONE_CLASS_FOLDER": "/opt/airflow/data/common/none_class",
+    "BASE_URL": "http://192.168.10.18:9191",
+    "PREFIX_RUN_ID": ""
 }
+    
 
 
 

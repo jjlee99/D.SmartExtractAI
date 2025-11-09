@@ -71,13 +71,59 @@ def init_appbuilder_views(app):
     appbuilder.session.remove()
     appbuilder.add_view_no_menu(views.AutocompleteView())
     appbuilder.add_view_no_menu(views.Airflow())
+    
+    appbuilder.menu.add_category(category=trs_label.get("plugin_links", {}).get("extract_results", "추출 결과"))
+    appbuilder.menu.menu.insert(0, appbuilder.menu.menu.pop())  # Place in the first menu slot
+    appbuilder.menu.add_category(category=trs_label.get("plugin_links", {}).get("layout_nanager", "서식 관리"))
+    appbuilder.menu.menu.insert(1, appbuilder.menu.menu.pop())  # Place in the second menu slot
+    
+    log_sub_menu = appbuilder.menu.find(trs_label.get("www_extensions_init_views", {}).get("browse_category")).childs
+    # 1 프로세스 모니터링
+    appbuilder.add_link(
+        name="Cluster Activity",
+        label=trs_label.get("www_extensions_init_appbuilder_links", {}).get("Cluster Activity_label", "Cluster Activity"),
+        category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
+        href="Airflow.cluster_activity")
+    log_sub_menu.insert(0, log_sub_menu.pop())
+    
+    # 2 사용자 액션 로그
+    appbuilder.add_view(
+        views.LogModelView, 
+        permissions.RESOURCE_AUDIT_LOG,
+        label=trs_label.get("www_extensions_init_views", {}).get("audit_log_label"), 
+        category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
+        #category=permissions.RESOURCE_BROWSE_MENU
+    )
+    log_sub_menu.insert(1, log_sub_menu.pop())
+
+    # 3 작업결과 로그
+    appbuilder.add_view(
+        views.XComModelView, 
+        permissions.RESOURCE_XCOM, 
+        label=trs_label.get("www_extensions_init_views", {}).get("xcom_label"), 
+        category=trs_label.get("www_extensions_init_views", {}).get("browse_category"), 
+        # category=permissions.RESOURCE_ADMIN_MENU
+    )
+    log_sub_menu.insert(2, log_sub_menu.pop())
+    # 4 작업 로그
+    appbuilder.add_view(
+        views.TaskInstanceModelView,
+        permissions.RESOURCE_TASK_INSTANCE,
+        label=trs_label.get("www_extensions_init_views", {}).get("task_instance_label"),
+        category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
+        # category=permissions.RESOURCE_BROWSE_MENU,
+    )
+    log_sub_menu.insert(3, log_sub_menu.pop())
+    # 5 프로세스 실행 로그
     appbuilder.add_view(
         views.DagRunModelView,
-        permissions.RESOURCE_DAG_RUN,label=trs_label.get("www_extensions_init_views", {}).get("dag_run_label"),
+        permissions.RESOURCE_DAG_RUN,
+        label=trs_label.get("www_extensions_init_views", {}).get("dag_run_label"),
         #category=permissions.RESOURCE_BROWSE_MENU,
         category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
         category_icon="fa-globe",
     )
+    log_sub_menu.insert(4, log_sub_menu.pop())  # Place in the first menu slot
     # appbuilder.add_view(
     #     views.JobModelView, permissions.RESOURCE_JOB,label=trs_label.get("www_extensions_init_views", {}).get("job_label"), category=trs_label.get("www_extensions_init_views", {}).get("browse_category"), #category=permissions.RESOURCE_BROWSE_MENU, 
     # )
@@ -89,18 +135,6 @@ def init_appbuilder_views(app):
     # appbuilder.add_view(
     #     views.SlaMissModelView, permissions.RESOURCE_SLA_MISS, label=trs_label.get("www_extensions_init_views", {}).get("sla_miss_label"),category=trs_label.get("www_extensions_init_views", {}).get("browse_category"), 
     # )
-    appbuilder.add_view(
-        views.TaskInstanceModelView,
-        permissions.RESOURCE_TASK_INSTANCE,label=trs_label.get("www_extensions_init_views", {}).get("task_instance_label"),
-        category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
-        # category=permissions.RESOURCE_BROWSE_MENU,
-    )
-    appbuilder.add_view(
-        views.XComModelView, permissions.RESOURCE_XCOM, label=trs_label.get("www_extensions_init_views", {}).get("xcom_label"), category=trs_label.get("www_extensions_init_views", {}).get("browse_category"), # category=permissions.RESOURCE_ADMIN_MENU
-    )
-    appbuilder.add_view(
-        views.LogModelView, permissions.RESOURCE_AUDIT_LOG,label=trs_label.get("www_extensions_init_views", {}).get("audit_log_label"), category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),#category=permissions.RESOURCE_BROWSE_MENU
-    )
     # appbuilder.add_view(
     #     views.TaskRescheduleModelView,
     #     permissions.RESOURCE_TASK_RESCHEDULE,label=trs_label.get("www_extensions_init_views", {}).get("task_reschedule_label"),
@@ -113,12 +147,6 @@ def init_appbuilder_views(app):
     #     category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
     #     # category=permissions.RESOURCE_BROWSE_MENU,
     # )
-    appbuilder.add_link(
-        name="Cluster Activity",
-        label=trs_label.get("www_extensions_init_appbuilder_links", {}).get("Cluster Activity_label", "Cluster Activity"),
-        category=trs_label.get("www_extensions_init_views", {}).get("browse_category"),
-        href="Airflow.cluster_activity")
-    
     # appbuilder.add_view(CustomUserStatsChartView,
     #             permissions.RESOURCE_USER_STATS_CHART,
     #             # "User's Statistics",

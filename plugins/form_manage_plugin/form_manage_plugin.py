@@ -10,6 +10,7 @@ from plugins.form_manage_plugin.views.doc_class_view import DocClassManageView
 from plugins.form_manage_plugin.views.layout_class_view import LayoutClassManageView
 from plugins.form_manage_plugin.views.section_class_view import SectionClassManageView
 from airflow.www.app import cached_app
+from airflow.trs_loader import trs_label
 
 DATA_FOLDER = Variable.get("DATA_FOLDER", default_var="/opt/airflow/data")
 DAGS_FOLDER = Variable.get("DAGS_FOLDER", default_var="/opt/airflow/dags")
@@ -92,12 +93,11 @@ v_flask_blueprints = [
     create_dag_bp
 ]
 v_appbuilder_views = [
-    {"name": "문서 관리","category": "서식 관리","view": DocClassManageView()},
-    {"name": "레이아웃 관리","category": "서식 관리","view": LayoutClassManageView()},
-    {"name": "구역 관리","category": "서식 관리","view": SectionClassManageView()},
-    {"name": "교정사전 관리","category": "서식 관리","view": DictionaryClassManageView()},
-    {"name": "조건별 교정사전 관리","category": "서식 관리","view": BlockDictionaryManageView()},
-    ## {"name": "데이터 조회","category": "문서서식 관리","view": DocClassManageView()}
+    {"name": "문서 관리","category": trs_label.get("plugin_links", {}).get("layout_nanager", "서식 관리"),"view": DocClassManageView()},
+    {"name": "레이아웃 관리","category": trs_label.get("plugin_links", {}).get("layout_nanager", "서식 관리"),"view": LayoutClassManageView()},
+    {"name": "구역 관리","category": trs_label.get("plugin_links", {}).get("layout_nanager", "서식 관리"),"view": SectionClassManageView()},
+    {"name": "교정사전 관리","category": trs_label.get("plugin_links", {}).get("layout_nanager", "서식 관리"),"view": DictionaryClassManageView()},
+    {"name": "조건별 교정사전 관리","category": trs_label.get("plugin_links", {}).get("layout_nanager", "서식 관리"),"view": BlockDictionaryManageView()},
 ]
 
 # 플러그인 정의

@@ -1,15 +1,18 @@
 from logging import exception
 from typing import Any, Union
 from utils.db.maria_util import execute, execute_many
+from airflow.models import Variable
+
+PREFIX_RUN_ID = Variable.get("PREFIX_RUN_ID", default_var="")
 
 #insert만 벌크 실행 가능
 def insert_map(key, params:Union[list,tuple]=None, fetch:bool=False, return_id:bool=False):
     map = {
-        "insertRun":"INSERT INTO TB_AF_RUN(DAG_ID, RUN_ID, START_DATE, STATUS) VALUES (%s, %s, current_timestamp(), 'P')", # P(진행중)
-        "insertTargetFile":"INSERT INTO TB_AF_TARGET(RUN_ID, TARGET_ID, CONTENT) VALUES (%s, %s, %s)",
-        "insertClassifyResult":"INSERT INTO TB_AF_TARGET(RUN_ID, TARGET_ID, CONTENT) VALUES (%s, %s, %s)",
+        "insertRun":f"INSERT INTO TB_AF_RUN(DAG_ID, RUN_ID, START_DATE, STATUS) VALUES (%s, CONCAT('{PREFIX_RUN_ID}',%s), current_timestamp(), 'P')", # P(진행중)
+        "insertTargetFile":f"INSERT INTO TB_AF_TARGET(RUN_ID, TARGET_ID, CONTENT) VALUES (CONCAT('{PREFIX_RUN_ID}',%s), %s, %s)",
+        "insertClassifyResult":f"INSERT INTO TB_AF_TARGET(RUN_ID, TARGET_ID, CONTENT) VALUES (CONCAT('{PREFIX_RUN_ID}',%s), %s, %s)",
         "insertTranslateLog":"INSERT INTO TB_OCR_TRN_LOG (TRN_TABLE_NM, TRN_TABLE_PK, TRN_COL_ID, ORI_TEXT, TRN_TEXT) VALUES (%s, %s, %s, %s, %s)",
-        "insertComplete":"INSERT INTO TB_AF_COMPLETE (RUN_ID,CONTENT,USE_YN) VALUES (%s,%s,'Y')",
+        "insertComplete":f"INSERT INTO TB_AF_COMPLETE (RUN_ID,CONTENT,USE_YN) VALUES (CONCAT('{PREFIX_RUN_ID}',%s),%s,'Y')",
         "insertCompleteMap":"INSERT INTO TB_AF_COMPLETE_MAP (COMPLETE_ID, TABLE_ID, PK_VALUE) VALUES (%s, %s, %s)",
         "insertCreateUnready":"INSERT INTO TB_AI_CREATE (DOC_CLASS_ID,LAYOUT_CLASS_ID,STATUS) VALUES (%s,%s,'U')", # U(미준비)
     }
@@ -26,9 +29,9 @@ def insert_map(key, params:Union[list,tuple]=None, fetch:bool=False, return_id:b
 
 def update_map(key, params:tuple=None):
     map = {
-        "updateRunEnd":"UPDATE TB_AF_RUN SET END_DATE = CURRENT_TIMESTAMP(), STATUS = %s WHERE DAG_ID = %s AND RUN_ID = %s ", # SATATUS : U(미준비),H(높은우선순위),W(대기),P(진행중),C(완료),E(오류),D(비활성화)
-        "updateTargetContent":"UPDATE TB_AF_TARGET SET CONTENT = %s WHERE RUN_ID = %s AND TARGET_ID = %s ",
-        "updateTargetContentDetail":"UPDATE TB_AF_TARGET SET CONTENT = JSON_SET(CONTENT, %s, %s) WHERE RUN_ID = %s AND TARGET_ID = %s ",
+        "updateRunEnd":f"UPDATE TB_AF_RUN SET END_DATE = CURRENT_TIMESTAMP(), STATUS = %s WHERE DAG_ID = %s AND RUN_ID = CONCAT('{PREFIX_RUN_ID}',%s) ", # SATATUS : U(미준비),H(높은우선순위),W(대기),P(진행중),C(완료),E(오류),D(비활성화)
+        "updateTargetContent":f"UPDATE TB_AF_TARGET SET CONTENT = %s WHERE RUN_ID = CONCAT('{PREFIX_RUN_ID}',%s) AND TARGET_ID = %s ",
+        "updateTargetContentDetail":f"UPDATE TB_AF_TARGET SET CONTENT = JSON_SET(CONTENT, %s, %s) WHERE RUN_ID = CONCAT('{PREFIX_RUN_ID}',%s) AND TARGET_ID = %s ",
         "updateClassifyAiInfo":"UPDATE TB_DI_LAYOUT_CLASS SET CLASSIFY_AI_INFO = %s WHERE LAYOUT_CLASS_ID = %s ",
         "updateCreateReady":"UPDATE TB_AI_CREATE SET STATUS = 'W' WHERE STATUS = 'U' ", # U(비활성화),W(대기)
         "updateCreateStart":"UPDATE TB_AI_CREATE SET START_DATE = CURRENT_TIMESTAMP(), STATUS = 'P' WHERE CREATE_ID = %s ", # P(진행중)
@@ -92,9 +95,9 @@ def select_list_map(key, params:tuple=None, dictionary:bool=False):
                 "WHERE B.END_DATE IS NULL AND B.STATUS NOT IN ('U','W','H','D') " # U(미준비),W(대기),H(높은우선순위),D(비활성화)   
             ,['create_id','first_status','layout_class_id','layout_name','doc_class_id','img_preprocess_info','classify_ai_info','template_file_path']
         ),
-        "selectBreakRun": ("SELECT A.RUN_ID, A.DAG_ID, A.START_DATE, A.END_DATE, A.STATUS "+
-                "FROM TB_AF_RUN A"+
-                "WHERE A.DAG_ID = %s AND A.RUN_ID = %s AND A.END_DATE IS NULL "
+        "selectBreakRun": ("SELECT A.RUN_ID, A.DAG_ID, A.START_DATE, A.END_DATE, A.STATUS "
+                "FROM TB_AF_RUN A"
+                f"WHERE A.DAG_ID = %s AND A.RUN_ID = CONCAT('{PREFIX_RUN_ID}',%s) AND A.END_DATE IS NULL "
             ,['run_id']
         ),
     }

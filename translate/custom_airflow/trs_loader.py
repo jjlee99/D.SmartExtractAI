@@ -11,6 +11,10 @@ trs_label = {
         "permission_label": "권한 목록",
         "category": "권한 관리",
     },
+    "plugin_links": {
+        "extract_results": "추출 결과",
+        "layout_nanager": "서식 관리"
+    },
     "www_extensions_init_appbuilder_links": {
         "DAGs_label": "프로세스 관리",
         "Cluster Activity_label": "프로세스 모니터링",

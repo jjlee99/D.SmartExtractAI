@@ -2,6 +2,7 @@
 from airflow.plugins_manager import AirflowPlugin
 from flask import Blueprint
 from flask_appbuilder import BaseView, expose
+from airflow.trs_loader import trs_label
 from plugins.result_check_plugin.views.check_view import ResultCheckView
 from plugins.result_check_plugin.views.adjust_view import AdjustCheckView
 
@@ -11,12 +12,12 @@ from plugins.result_check_plugin.views.adjust_view import AdjustCheckView
 v_appbuilder_views = [
     {
         "name": "추출 데이터", 
-        "category": "추출 결과", 
+        "category": trs_label.get("plugin_links", {}).get("extract_results", "추출 결과"), 
         "view": ResultCheckView()
     },
     {
         "name": "교정 정보",
-        "category": "추출 결과",
+        "category": trs_label.get("plugin_links", {}).get("extract_results", "추출 결과"),
         "view": AdjustCheckView()
     }
 

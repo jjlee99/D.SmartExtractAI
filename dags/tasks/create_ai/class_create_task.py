@@ -66,7 +66,7 @@ def _iamge_data_augment(origin_dir:str, ready_dir:str, threshold:int=200, aug_li
     from PIL import Image, ImageFilter
     from torchvision.transforms import functional as F
     
-    image_paths = file_util.get_image_paths(origin_dir)
+    image_paths = file_util.get_image_paths_recursive(origin_dir)
     os.makedirs(ready_dir, exist_ok=True)
     
     if len(image_paths) == 0:
@@ -120,6 +120,7 @@ def _iamge_data_augment(origin_dir:str, ready_dir:str, threshold:int=200, aug_li
         ])
     num = 0
     for img_path in image_paths:
+        num+=1
         img = Image.open(img_path).convert('RGB')
         width, height = img.size
         augmentation = get_augmentation(width, height) if num_aug > 1 else None
@@ -167,26 +168,35 @@ def _balance_false_images(true_path:str,false_path:str):
 
     if needed_files > none_doc_count:
         print(f"경고: 사용 가능 파일 부족 (요청: {needed_files}, 실제: {none_doc_count})")
-        needed_files = none_doc_count
-        if false_count == 0 and none_doc_count == 0:
-            raise ValueError("FALSE 학습을 위한 최소 데이터가 없습니다") # 필요 시 증강으로 수정
-
-    # 수정 사항 3: needed_files가 0인 경우 처리
-    selected_files = random.sample(none_doc_paths, needed_files) if needed_files > 0 else []
+        if none_doc_count == 0:
+            if false_count == 0:
+                raise ValueError("FALSE 학습을 위한 최소 데이터가 없습니다")
+            else:
+                needed_files = none_doc_count # 오리지널 false로만 학습
+        else:
+            false_image_augment_at = True
+            
+        
+            
+    if false_image_augment_at:
+        _iamge_data_augment(NONE_CLASS_FOLDER,false_path,needed_files,needed_files) # 특정 서식 이미지 제한없이 증강
+    else:
+        # needed_files가 0인 경우 처리
+        selected_files = random.sample(none_doc_paths, needed_files) if needed_files > 0 else []
+        
+        os.makedirs(false_path, exist_ok=True)
+        copied_count = 0
+        for src_path in selected_files:
+            try:
+                new_filename = f"img{false_count+copied_count}_aug0.png"
+                dst_path = os.path.join(false_path, new_filename)
+                shutil.copy2(src_path, dst_path)
+                copied_count += 1
+                print(f"복사 완료: {src_path} -> {dst_path}")
+            except Exception as e:
+                print(f"복사 실패: {src_path} - {str(e)}")
     
-    os.makedirs(false_path, exist_ok=True)
-    copied_count = 0
-    for src_path in selected_files:
-        try:
-            new_filename = f"img{copied_count}_aug0.png"
-            dst_path = os.path.join(false_path, new_filename)
-            shutil.copy2(src_path, dst_path)
-            copied_count += 1
-            print(f"복사 완료: {src_path} -> {dst_path}")
-        except Exception as e:
-            print(f"복사 실패: {src_path} - {str(e)}")
-    
-    return {"copied_count": copied_count, "total_false_count": false_count + copied_count}
+        print(f"copied_count: {copied_count}, total_false_count: {false_count + copied_count}")
 
 @task(pool='ocr_pool') 
 def build_balanced_dataset(layout_info:dict):
@@ -254,6 +264,14 @@ def generating_masking_image(layout_info:dict):
         detect_vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
 
         combined_lines = cv2.bitwise_or(detect_horizontal, detect_vertical)
+        
+        img_h, img_w = combined_lines.shape[:2]
+        threshold_val = img_w * 0.05 * img_h * 0.05 # 최소 선 픽셀 수 임계값
+        num_line_pixels = cv2.countNonZero(combined_lines)
+
+        # 추출된 선이 너무 적으면 이번 이미지는 합치지 않고 넘어감
+        if num_line_pixels < threshold_val:
+            continue
         
         # 가운데를 기준으로 겹쳐서 마스크 생성
         if all_combined_lines is None:
@@ -331,10 +349,11 @@ def complete_runtime(result_map:dict, layout_info:dict ,**context):
                     dag_id=dag_id,
                     run_id=new_run_id,
                     conf=next_layout,
-                    execution_date=context['ts'],  # context timestamp 활용
-                    start_date=datetime.datetime.now(),
+                    execution_date=datetime.datetime.now(datetime.timezone.utc),
+                    start_date=datetime.datetime.now(datetime.timezone.utc),
                     external_trigger=True,
                     state=State.RUNNING,
+                    run_type='scheduled'
                 )
                 session.add(dr)
                 session.commit()

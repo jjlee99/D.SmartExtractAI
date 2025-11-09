@@ -139,8 +139,8 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
-#SJH: 컴포즈할 이미지 명시
-    image: digitalflow-airflow-init:2.10.5
+#SJH: 컴포즈할 이미지 명시. 변수는 .env참조
+    image: "${AIRFLOW_IMAGE_NAME}:${AIRFLOW_IMAGE_TAG}"
 #//SJH
     command: webserver
     ports:
@@ -164,7 +164,7 @@ services:
   airflow-scheduler:
     <<: *airflow-common
 #SJH: 컴포즈할 이미지 명시
-    image: digitalflow-airflow-init:2.10.5
+    image: "${AIRFLOW_IMAGE_NAME}:${AIRFLOW_IMAGE_TAG}"
 #//SJH
     command: scheduler
     healthcheck:
@@ -182,7 +182,7 @@ services:
   airflow-worker:
     <<: *airflow-common
 #SJH: 컴포즈할 이미지 명시
-    image: digitalflow-airflow-init:2.10.5
+    image: "${AIRFLOW_IMAGE_NAME}:${AIRFLOW_IMAGE_TAG}"
 #//SJH
     command: celery worker
     healthcheck:

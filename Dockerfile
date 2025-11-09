@@ -36,7 +36,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # 작업 디렉토리 설정
 WORKDIR /opt/airflow
 
-# COPY translate/custom_airflow/. /home/airflow/.local/lib/python3.12/site-packages/airflow/
-# COPY translate/custom_flask_appbuilder/. /home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/
+COPY translate/custom_airflow/. /home/airflow/.local/lib/python3.12/site-packages/airflow/
+COPY translate/custom_flask_appbuilder/. /home/airflow/.local/lib/python3.12/site-packages/flask_appbuilder/
 
 ENTRYPOINT ["/entrypoint.sh"]
